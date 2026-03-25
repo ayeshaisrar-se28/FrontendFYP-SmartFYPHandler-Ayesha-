@@ -34,7 +34,22 @@ const MOCK_USERS = [
 export const authService = {
   login: async (credentials) => {
     try {
-      // Mock authentication for testing
+      // 1. Try real API first
+      try {
+        const response = await api.post('/auth/login', credentials);
+        
+        if (response.data.success) {
+          const { token, user } = response.data;
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(user));
+          return response.data;
+        }
+      } catch (apiError) {
+        // Fallback to mock for test users if API fails or user not found there
+        console.warn('Backend login failed, trying mock users...', apiError.message);
+      }
+
+      // 2. Mock authentication for testing/dev users
       const mockUser = MOCK_USERS.find(
         user => user.email === credentials.email && user.password === credentials.password
       );
@@ -50,30 +65,12 @@ export const authService = {
           success: true,
           token: mockToken,
           user: userWithoutPassword,
-          message: 'Login successful'
+          message: 'Login successful (Mock)'
         };
       } else {
         throw new Error('Invalid email or password');
       }
-      
-      // Original API call (uncomment when backend is ready)
-      /*
-      const response = await api.post('/auth/login', credentials);
-      
-      if (response.data.success) {
-        const { token, user } = response.data;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Login failed');
-      }
-      */
     } catch (error) {
-      if (error.message === 'Invalid email or password') {
-        throw error;
-      }
-      // Handle API errors when backend is connected
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       } else if (error.response?.status === 401) {
@@ -90,14 +87,30 @@ export const authService = {
 
   register: async (userData) => {
     try {
-      // Mock registration for testing
+      // 1. Try real API
+      try {
+        const response = await api.post('/auth/register', userData);
+        
+        if (response.data.success) {
+          const { token, user } = response.data;
+          localStorage.setItem('token', token);
+          localStorage.setItem('user', JSON.stringify(user));
+          return response.data;
+        }
+      } catch (apiError) {
+        console.warn('Backend registration failed, trying mock...', apiError.message);
+        if (apiError.response?.status === 409) {
+             throw new Error('User with this email already exists');
+        }
+      }
+
+      // 2. Mock registration for testing
       const existingUser = MOCK_USERS.find(user => user.email === userData.email);
       
       if (existingUser) {
         throw new Error('User with this email already exists');
       }
       
-      // Create new mock user
       const newUser = {
         id: MOCK_USERS.length + 1,
         email: userData.email,
@@ -116,27 +129,9 @@ export const authService = {
         success: true,
         token: mockToken,
         user: newUser,
-        message: 'Registration successful'
+        message: 'Registration successful (Mock)'
       };
-      
-      // Original API call (uncomment when backend is ready)
-      /*
-      const response = await api.post('/auth/register', userData);
-      
-      if (response.data.success) {
-        const { token, user } = response.data;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
-        return response.data;
-      } else {
-        throw new Error(response.data.message || 'Registration failed');
-      }
-      */
     } catch (error) {
-      if (error.message === 'User with this email already exists') {
-        throw error;
-      }
-      // Handle API errors when backend is connected
       if (error.response?.data?.message) {
         throw new Error(error.response.data.message);
       } else if (error.response?.status === 409) {
@@ -149,6 +144,29 @@ export const authService = {
         throw new Error('Cannot connect to server. Please check your connection.');
       } else {
         throw new Error(error.message || 'Registration failed');
+      }
+    }
+  },
+
+  googleLogin: async (idToken) => {
+    try {
+      const response = await api.post('/auth/google-login', { idToken });
+      
+      if (response.data.success) {
+        const { token, user } = response.data;
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+        return response.data;
+      } else {
+        throw new Error(response.data.message || 'Google login failed');
+      }
+    } catch (error) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.response?.status === 401) {
+        throw new Error('Google authentication failed');
+      } else {
+        throw new Error(error.message || 'Google login failed');
       }
     }
   },

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Lock, Mail, Eye, EyeOff } from 'lucide-react';
+import { GoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -12,7 +13,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -123,6 +124,39 @@ const Login = () => {
                 'Sign In'
               )}
             </button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                try {
+                  setLoading(true);
+                  await googleLogin(credentialResponse.credential);
+                  toast.success('Google Login successful!');
+                  navigate(from, { replace: true });
+                } catch (error) {
+                  toast.error(error.message || 'Google Login failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              onError={() => {
+                toast.error('Google Login Failed');
+              }}
+              useOneTap
+              theme="outline"
+              size="large"
+              width="100%"
+            />
           </div>
 
           <div className="text-center">

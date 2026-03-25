@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Layout from './components/common/Layout';
 import Login from './components/auth/Login';
@@ -168,136 +169,138 @@ const UnauthorizedPage = () => (
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="App">
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-              },
-            }}
-          />
-          
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<EnhancedHome />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            
-            {/* Protected Dashboard Routes */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <DashboardRouter />
-                </ProtectedRoute>
-              } 
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+      <AuthProvider>
+        <Router>
+          <div className="App">
+            <Toaster 
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: '#363636',
+                  color: '#fff',
+                },
+              }}
             />
             
-            <Route 
-              path="/dashboard/student" 
-              element={
-                <ProtectedRoute allowedRoles={[USER_ROLES.STUDENT]}>
-                  <Layout><StudentDashboard /></Layout>
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/dashboard/teacher" 
-              element={
-                <ProtectedRoute allowedRoles={[USER_ROLES.TEACHER]}>
-                  <Layout><TeacherDashboard /></Layout>
-                </ProtectedRoute>
-              } 
-            />
-            
-            <Route 
-              path="/dashboard/admin" 
-              element={
-                <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
-                  <Layout><AdminDashboard /></Layout>
-                </ProtectedRoute>
-              } 
-            />
-            
-            {/* Project Details Route - accessible to all authenticated users */}
-            <Route
-              path="/project/:projectId"
-              element={
-                <ProtectedRoute>
-                  <Layout><ProjectDetails /></Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<EnhancedHome />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              
+              {/* Protected Dashboard Routes */}
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <DashboardRouter />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/dashboard/student" 
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.STUDENT]}>
+                    <Layout><StudentDashboard /></Layout>
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/dashboard/teacher" 
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.TEACHER]}>
+                    <Layout><TeacherDashboard /></Layout>
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/dashboard/admin" 
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                    <Layout><AdminDashboard /></Layout>
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* Project Details Route - accessible to all authenticated users */}
+              <Route
+                path="/project/:projectId"
+                element={
+                  <ProtectedRoute>
+                    <Layout><ProjectDetails /></Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* FYP Rankings and Search Routes - accessible to all authenticated users */}
-            <Route
-              path="/rankings"
-              element={
-                <ProtectedRoute>
-                  <Layout><FYPRankings /></Layout>
-                </ProtectedRoute>
-              }
-            />
+              {/* FYP Rankings and Search Routes - accessible to all authenticated users */}
+              <Route
+                path="/rankings"
+                element={
+                  <ProtectedRoute>
+                    <Layout><FYPRankings /></Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/search"
-              element={
-                <ProtectedRoute>
-                  <Layout><FYPSearch /></Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/search"
+                element={
+                  <ProtectedRoute>
+                    <Layout><FYPSearch /></Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Teacher FYP Management Route */}
-            <Route
-              path="/teacher/ranking-management"
-              element={
-                <ProtectedRoute allowedRoles={[USER_ROLES.TEACHER]}>
-                  <Layout><FYPRankingManagement /></Layout>
-                </ProtectedRoute>
-              }
-            />
+              {/* Teacher FYP Management Route */}
+              <Route
+                path="/teacher/ranking-management"
+                element={
+                  <ProtectedRoute allowedRoles={[USER_ROLES.TEACHER]}>
+                    <Layout><FYPRankingManagement /></Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* AI Dashboard and Recommendations Routes */}
-            <Route
-              path="/ai"
-              element={
-                <ProtectedRoute>
-                  <Layout><AIDashboard /></Layout>
-                </ProtectedRoute>
-              }
-            />
+              {/* AI Dashboard and Recommendations Routes */}
+              <Route
+                path="/ai"
+                element={
+                  <ProtectedRoute>
+                    <Layout><AIDashboard /></Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path="/ai/recommendations"
-              element={
-                <ProtectedRoute>
-                  <Layout><ProjectRecommendations numRecommendations={10} /></Layout>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path="/ai/recommendations"
+                element={
+                  <ProtectedRoute>
+                    <Layout><ProjectRecommendations numRecommendations={10} /></Layout>
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Test Route for debugging */}
-            <Route
-              path="/test-data"
-              element={
-                <Layout><DataTest /></Layout>
-              }
-            />
+              {/* Test Route for debugging */}
+              <Route
+                path="/test-data"
+                element={
+                  <Layout><DataTest /></Layout>
+                }
+              />
 
-            {/* Fallback Routes */}
-            <Route path="/unauthorized" element={<UnauthorizedPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+              {/* Fallback Routes */}
+              <Route path="/unauthorized" element={<UnauthorizedPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        </Router>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
 
