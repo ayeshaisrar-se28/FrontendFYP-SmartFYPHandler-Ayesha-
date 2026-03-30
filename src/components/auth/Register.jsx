@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { UserPlus, Mail, Lock, User, Building, Hash, Eye, EyeOff } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
+import projectService from '../../services/projectService';
+import { useEffect } from 'react';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -11,30 +13,49 @@ const Register = () => {
     lastName: '',
     email: '',
     password: '',
+    confirmPassword: '',
+    role: 1, // Default to Student (enum value)
     studentId: '',
-    role: 1, // Default to Student
-    department: ''
+    department: '',
+    departmentId: null
   });
+  const [dbDepartments, setDbDepartments] = useState([
+    { id: 1, name: 'Computer Science' },
+    { id: 2, name: 'Software Engineering' },
+    { id: 3, name: 'Information Technology' },
+    { id: 4, name: 'Data Science' },
+    { id: 5, name: 'Cybersecurity' }
+  ]);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const depts = await projectService.getDepartments();
+        if (depts && depts.length > 0) {
+          setDbDepartments(depts);
+          if (!formData.department) {
+            setFormData(prev => ({ ...prev, department: depts[0].id }));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+        // Fallback already set in initial state
+      }
+    };
+    fetchDepartments();
+  }, []);
+
   const roles = [
     { value: 1, label: 'Student' },
     { value: 2, label: 'Teacher' }
   ];
 
-  const departments = [
-    'Computer Science',
-    'Software Engineering',
-    'Information Technology',
-    'Data Science',
-    'Cybersecurity',
-    'Electrical Engineering',
-    'Mathematics'
-  ];
+  // Removed duplicate hardcoded departments array to use dbDepartments with fallback
 
   const handleChange = (e) => {
     const value = e.target.name === 'role' ? parseInt(e.target.value) : e.target.value;
@@ -224,15 +245,23 @@ const Register = () => {
                   name="department"
                   required
                   value={formData.department}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const dept = dbDepartments.find(d => d.name === e.target.value);
+                    setFormData(prev => ({
+                      ...prev,
+                      department: e.target.value,
+                      departmentId: dept ? dept.id : null
+                    }));
+                  }}
                   className="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 >
                   <option value="">Select Department</option>
-                  {departments.map((dept) => (
-                    <option key={dept} value={dept}>
-                      {dept}
+                  {dbDepartments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
                     </option>
                   ))}
+                  {dbDepartments.length === 0 && <option value="">Loading departments...</option>}
                 </select>
               </div>
             </div>
@@ -264,9 +293,14 @@ const Register = () => {
             <GoogleLogin
               onSuccess={async (credentialResponse) => {
                 try {
+                  if (!formData.department) {
+                    toast.error('Please select a department first');
+                    return;
+                  }
                   setLoading(true);
-                  await googleLogin(credentialResponse.credential);
-                  toast.success('Google registration successful!');
+                  const roleLabel = roles.find(r => r.value === formData.role)?.label || 'Student';
+                  await googleLogin(credentialResponse.credential, roleLabel, formData.department);
+                  toast.success(`Google registration as ${roleLabel} successful!`);
                   navigate('/dashboard');
                 } catch (error) {
                   toast.error(error.message || 'Google registration failed');

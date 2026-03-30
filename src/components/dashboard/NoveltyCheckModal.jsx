@@ -40,7 +40,28 @@ const NoveltyCheckModal = ({ isOpen, onClose }) => {
         try {
             const response = await noveltyService.analyzeIdea({ title, abstract });
             if (response && response.data) {
-                setResult(response.data);
+                const data = { ...response.data };
+                const maxInternal = data.maxInternalSimilarity || 0;
+                const maxGithub = data.maxGithubSimilarity || 0;
+                const maxPaper = data.maxPaperSimilarity || 0;
+                
+                const overallMaxSimilarity = Math.max(maxInternal, maxGithub, maxPaper);
+                
+                // Recalculate originality score to be derived directly from the max of the three sources
+                const newScore = Math.max(0, Math.round(100 - (overallMaxSimilarity * 100)));
+                data.originalityScore = newScore;
+                
+                // Also overwrite the explanation from the backend with the correct dynamic values
+                const percentage = (overallMaxSimilarity * 100).toFixed(0);
+                if (newScore === 100) {
+                    data.explanation = "Your idea appears completely unique based on our database.";
+                } else {
+                    const topMatch = (data.topMatches || data.matches || [])[0];
+                    const matchName = topMatch ? `'${topMatch.title}'` : "an existing project";
+                    data.explanation = `Your Originality Score (${newScore}%) is calculated by deducting the maximum similarity found (${percentage}%). The most similar project found was ${matchName} with a ${percentage}% match.`;
+                }
+                
+                setResult(data);
             } else {
                 throw new Error('Invalid response from server');
             }

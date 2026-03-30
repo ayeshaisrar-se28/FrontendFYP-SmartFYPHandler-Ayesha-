@@ -89,6 +89,39 @@ const projectService = {
             console.error('Error fetching stats:', error);
             throw error;
         }
+    },
+    /**
+     * Create a new project
+     * @param {Object} projectData 
+     */
+    createProject: async (projectData) => {
+        try {
+            const response = await api.post('/projects', projectData);
+            return response.data;
+        } catch (error) {
+            console.error('Error creating project:', error);
+        }
+    },
+    updateProject: async (id, projectData) => {
+        try {
+            const response = await api.put(`/projects/${id}`, projectData);
+            return response.data;
+        } catch (error) {
+            console.error(`Error updating project ${id}:`, error);
+            throw error;
+        }
+    },
+    /**
+     * Get all students (for assignment)
+     */
+    getStudents: async () => {
+        try {
+            const response = await api.get('/auth/students'); 
+            return response.data.data;
+        } catch (error) {
+            console.error('Error fetching students:', error);
+            return [];
+        }
     }
 };
 

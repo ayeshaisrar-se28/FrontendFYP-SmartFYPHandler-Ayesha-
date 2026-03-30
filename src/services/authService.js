@@ -1,6 +1,6 @@
 import api from './api';
 
-// Mock users for testing (remove when backend is ready)
+// Mock users for testing (Remove/Comment out to ensure backend is used)
 const MOCK_USERS = [
   {
     id: 1,
@@ -9,7 +9,9 @@ const MOCK_USERS = [
     firstName: 'John',
     lastName: 'Student',
     role: 'Student',
-    department: 'Computer Science'
+    roleValue: 1,
+    department: 'Computer Science',
+    departmentId: 1
   },
   {
     id: 2,
@@ -18,7 +20,9 @@ const MOCK_USERS = [
     firstName: 'Sarah',
     lastName: 'Johnson',
     role: 'Teacher',
-    department: 'Computer Science'
+    roleValue: 2,
+    department: 'Computer Science',
+    departmentId: 1
   },
   {
     id: 3,
@@ -50,13 +54,21 @@ export const authService = {
       }
 
       // 2. Mock authentication for testing/dev users
+      const emailLower = credentials.email.trim().toLowerCase();
+      console.log('Searching mock users for:', emailLower);
+      
       const mockUser = MOCK_USERS.find(
-        user => user.email === credentials.email && user.password === credentials.password
+        user => user.email.toLowerCase() === emailLower && user.password === credentials.password
       );
       
       if (mockUser) {
         const { password, ...userWithoutPassword } = mockUser;
         const mockToken = `mock-token-${mockUser.id}`;
+        
+        // Ensure role is correctly named for frontend
+        userWithoutPassword.role = userWithoutPassword.role || userWithoutPassword.Role;
+
+        console.log(`Mock Login: ${userWithoutPassword.role} (${userWithoutPassword.email})`);
         
         localStorage.setItem('token', mockToken);
         localStorage.setItem('user', JSON.stringify(userWithoutPassword));
@@ -65,7 +77,7 @@ export const authService = {
           success: true,
           token: mockToken,
           user: userWithoutPassword,
-          message: 'Login successful (Mock)'
+          message: 'Login successful'
         };
       } else {
         throw new Error('Invalid email or password');
@@ -105,7 +117,8 @@ export const authService = {
       }
 
       // 2. Mock registration for testing
-      const existingUser = MOCK_USERS.find(user => user.email === userData.email);
+      const emailLower = userData.email.trim().toLowerCase();
+      const existingUser = MOCK_USERS.find(user => user.email.toLowerCase() === emailLower);
       
       if (existingUser) {
         throw new Error('User with this email already exists');
@@ -117,6 +130,7 @@ export const authService = {
         firstName: userData.firstName,
         lastName: userData.lastName,
         role: userData.role || 'Student',
+        roleValue: userData.role === 'Teacher' ? 2 : 1,
         department: userData.department || 'Computer Science'
       };
       
@@ -136,24 +150,28 @@ export const authService = {
         throw new Error(error.response.data.message);
       } else if (error.response?.status === 409) {
         throw new Error('User with this email already exists');
-      } else if (error.response?.status === 400) {
-        throw new Error('Invalid registration data. Please check your inputs.');
-      } else if (error.response?.status >= 500) {
-        throw new Error('Server error. Please try again later.');
-      } else if (error.message === 'Network Error') {
-        throw new Error('Cannot connect to server. Please check your connection.');
+      } else if (error.label === 'Network Error') {
+         throw new Error('Cannot connect to server. Please check your connection.');
       } else {
         throw new Error(error.message || 'Registration failed');
       }
     }
   },
 
-  googleLogin: async (idToken) => {
+  googleLogin: async (idToken, role = 'Student', department = '') => {
     try {
-      const response = await api.post('/auth/google-login', { idToken });
+      const response = await api.post('/auth/google-login', { 
+        idToken, 
+        role,
+        department 
+      });
       
       if (response.data.success) {
         const { token, user } = response.data;
+        // Normalize role property
+        if (user && !user.role && user.Role) user.role = user.Role;
+        
+        console.log('Google login success. Normalized user role:', user?.role);
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
         return response.data;
@@ -177,6 +195,9 @@ export const authService = {
       
       if (response.data.success) {
         const user = response.data.user;
+        // Normalize role property
+        if (user && !user.role && user.Role) user.role = user.Role;
+        
         localStorage.setItem('user', JSON.stringify(user));
         return user;
       } else {

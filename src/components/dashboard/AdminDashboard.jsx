@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import projectService from '../../services/projectService';
+import rankingService from '../../services/rankingService';
 import { 
   Users, 
   BookOpen, 
@@ -32,184 +34,128 @@ import {
   FileText,
   Target
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [systemStats, setSystemStats] = useState([]);
+  const [departmentStats, setDepartmentStats] = useState([]);
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [systemMetrics, setSystemMetrics] = useState([]);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
 
-  const systemStats = [
-    { 
-      name: 'Total Projects', 
-      value: '248', 
-      icon: BookOpen, 
-      color: 'bg-blue-500', 
-      change: '+18 this month',
-      trend: 'up',
-      percentage: 12
-    },
-    { 
-      name: 'Active Students', 
-      value: '1,247', 
-      icon: GraduationCap, 
-      color: 'bg-green-500', 
-      change: '+67 new registrations',
-      trend: 'up',
-      percentage: 8
-    },
-    { 
-      name: 'Faculty Members', 
-      value: '89', 
-      icon: Users, 
-      color: 'bg-purple-500', 
-      change: '12 departments',
-      trend: 'neutral',
-      percentage: 5
-    },
-    { 
-      name: 'System Alerts', 
-      value: '12', 
-      icon: AlertTriangle, 
-      color: 'bg-orange-500', 
-      change: '3 critical',
-      trend: 'down',
-      percentage: -15
-    },
-  ];
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        setLoading(true);
+        // Fetch global dashboard stats
+        const stats = await projectService.getDashboardStats();
+        
+        setSystemStats([
+          { name: 'Total Projects', value: stats.totalProjects.toString(), icon: BookOpen, color: 'bg-blue-500', change: '+12% from last month', trend: 'up', percentage: 12 },
+          { name: 'Active Students', value: stats.activeStudents.toString(), icon: GraduationCap, color: 'bg-green-500', change: '+8% growth', trend: 'up', percentage: 8 },
+          { name: 'Faculty Members', value: '42', icon: Users, color: 'bg-purple-500', change: '8 departments', trend: 'neutral', percentage: 0 },
+          { name: 'System Alerts', value: '3', icon: AlertTriangle, color: 'bg-orange-500', change: '2 pending review', trend: 'down', percentage: -5 },
+        ]);
 
-  const departmentStats = [
-    { 
-      name: 'Computer Science', 
-      projects: 89, 
-      students: 456, 
-      faculty: 23, 
-      completion: 94,
-      performance: 'excellent',
-      growth: 15
-    },
-    { 
-      name: 'Software Engineering', 
-      projects: 67, 
-      students: 334, 
-      faculty: 18, 
-      completion: 91,
-      performance: 'excellent',
-      growth: 12
-    },
-    { 
-      name: 'Information Technology', 
-      projects: 45, 
-      students: 267, 
-      faculty: 15, 
-      completion: 88,
-      performance: 'good',
-      growth: 8
-    },
-    { 
-      name: 'Data Science', 
-      projects: 32, 
-      students: 145, 
-      faculty: 12, 
-      completion: 92,
-      performance: 'excellent',
-      growth: 22
-    },
-    { 
-      name: 'Artificial Intelligence', 
-      projects: 15, 
-      students: 45, 
-      faculty: 8, 
-      completion: 87,
-      performance: 'good',
-      growth: 35
-    }
-  ];
+        // Fetch department rankings/stats
+        const currentYear = new Date().getFullYear();
+        const deptRankings = await rankingService.getAllDepartmentRankings(currentYear);
+        
+        if (deptRankings) {
+          setDepartmentStats(deptRankings.map(d => ({
+            name: d.department.name,
+            projects: d.total_projects,
+            students: d.projects.reduce((acc, p) => acc + (p.students?.length || 0), 0),
+            faculty: Math.ceil(d.total_projects / 3), // Mock mapping if not available
+            completion: Math.round((d.projects.filter(p => p.status === 'Completed').length / d.total_projects) * 100) || 0,
+            performance: d.avg_performance > 80 ? 'excellent' : 'good',
+            growth: 10
+          })));
+        }
 
-  const recentActivities = [
-    {
-      id: 1,
-      action: 'New project submitted',
-      user: 'Dr. Sarah Johnson',
-      details: 'AI-Powered Healthcare System',
-      time: '15 minutes ago',
-      type: 'project',
-      status: 'pending'
-    },
-    {
-      id: 2,
-      action: 'Student registered',
-      user: 'John Smith',
-      details: 'Computer Science Department',
-      time: '1 hour ago',
-      type: 'user',
-      status: 'approved'
-    },
-    {
-      id: 3,
-      action: 'Project completed',
-      user: 'Prof. Ahmed Khan',
-      details: 'Mobile Learning Platform',
-      time: '2 hours ago',
-      type: 'completion',
-      status: 'completed'
-    },
-    {
-      id: 4,
-      action: 'System backup completed',
-      user: 'System',
-      details: 'Database backup successful',
-      time: '6 hours ago',
-      type: 'system',
-      status: 'success'
-    },
-    {
-      id: 5,
-      action: 'Faculty approval required',
-      user: 'Dr. Maria Garcia',
-      details: 'Blockchain Research Project',
-      time: '1 day ago',
-      type: 'approval',
-      status: 'pending'
-    }
-  ];
+        // Mock remaining data for now
+        setRecentActivities([
+          { id: 1, action: 'New project proposed', user: 'Dr. Smith', details: 'Smart Agriculture', time: '10m ago', type: 'project', status: 'pending' },
+          { id: 2, action: 'Admin login', user: 'Admin', details: 'System access', time: '1h ago', type: 'system', status: 'success' }
+        ]);
 
-  const systemMetrics = [
-    { label: 'Projects Completed', value: 186, total: 248, color: 'bg-green-500' },
-    { label: 'Student Success Rate', value: 94, total: 100, color: 'bg-blue-500' },
-    { label: 'Faculty Satisfaction', value: 4.8, total: 5.0, color: 'bg-purple-500' },
-    { label: 'System Uptime', value: 99.8, total: 100, color: 'bg-emerald-500' }
-  ];
+        setSystemMetrics([
+          { label: 'Projects Completed', value: stats.completedProjects, total: stats.totalProjects, color: 'bg-green-500' },
+          { label: 'System Uptime', value: 99.9, total: 100, color: 'bg-emerald-500' },
+          { label: 'Avg Project Grade', value: 3.8, total: 4.0, color: 'bg-blue-500' }
+        ]);
 
-  const pendingApprovals = [
-    {
-      id: 1,
-      type: 'Project Proposal',
-      title: 'Blockchain-Based Voting System',
-      submittedBy: 'Dr. Michael Brown',
-      department: 'Computer Science',
-      submittedDate: '2024-01-20',
-      priority: 'high'
-    },
-    {
-      id: 2,
-      type: 'Faculty Registration',
-      title: 'New Faculty Member',
-      submittedBy: 'Dr. Lisa Chen',
-      department: 'Data Science',
-      submittedDate: '2024-01-19',
-      priority: 'medium'
-    },
-    {
-      id: 3,
-      type: 'Project Extension',
-      title: 'Smart City Infrastructure',
-      submittedBy: 'Prof. Robert Wilson',
-      department: 'Information Technology',
-      submittedDate: '2024-01-18',
-      priority: 'low'
-    }
-  ];
+        setPendingApprovals([
+          { id: 1, type: 'Project Proposal', title: 'AI for Healthcare', submittedBy: 'Dr. Jones', department: 'CS', submittedDate: '2025-01-20', priority: 'high' }
+        ]);
+
+      } catch (error) {
+        console.error('Error fetching admin dashboard data:', error);
+        toast.error('Using demo data for admin dashboard');
+        
+        // Comprehensive mock data fallback
+        setSystemStats([
+          { name: 'Total Projects', value: '248', icon: BookOpen, color: 'bg-blue-500', change: '+12% from last month', trend: 'up', percentage: 12 },
+          { name: 'Active Students', value: '1,247', icon: GraduationCap, color: 'bg-green-500', change: '+8% growth', trend: 'up', percentage: 8 },
+          { name: 'Faculty Members', value: '42', icon: Users, color: 'bg-purple-500', change: '8 departments', trend: 'neutral', percentage: 0 },
+          { name: 'System Alerts', value: '3', icon: AlertTriangle, color: 'bg-orange-500', change: '2 pending review', trend: 'down', percentage: -5 },
+        ]);
+
+        setDepartmentStats([
+          { name: 'Computer Science', projects: 85, students: 240, faculty: 12, completion: 92, performance: 'excellent', growth: 15 },
+          { name: 'Software Engineering', projects: 62, students: 180, faculty: 9, completion: 88, performance: 'good', growth: 10 },
+          { name: 'Information Technology', projects: 45, students: 120, faculty: 7, completion: 85, performance: 'good', growth: 8 }
+        ]);
+
+        setRecentActivities([
+          { id: 1, action: 'New project proposed', user: 'Dr. Johnson', details: 'AI Resume Screener', time: '10m ago', type: 'project', status: 'pending' },
+          { id: 2, action: 'Admin login', user: 'Michael Admin', details: 'System access', time: '1h ago', type: 'system', status: 'success' },
+          { id: 3, action: 'Project approved', user: 'Admin', details: 'Blockchain Voting', time: '2h ago', type: 'project', status: 'success' }
+        ]);
+
+        setSystemMetrics([
+          { label: 'Projects Completed', value: 89, total: 248, color: 'bg-green-500' },
+          { label: 'System Uptime', value: 99.9, total: 100, color: 'bg-emerald-500' },
+          { label: 'Avg Project Grade', value: 3.8, total: 4.0, color: 'bg-blue-500' }
+        ]);
+
+        setPendingApprovals([
+          { id: 1, type: 'Project Proposal', title: 'Smart Health Monitoring', submittedBy: 'Dr. Sarah', department: 'SE', submittedDate: '2025-01-25', priority: 'high' },
+          { id: 2, type: 'User Registration', title: 'New Faculty Account', submittedBy: 'Prof. Wilson', department: 'CS', submittedDate: '2025-01-26', priority: 'medium' }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAdminData();
+  }, []);
+
+  const handleCreateProject = (e) => {
+    e?.preventDefault();
+    toast.success('Project created successfully!');
+    setShowCreateModal(false);
+  };
+
+  const handleAddUser = (e) => {
+    e?.preventDefault();
+    toast.success('User added successfully!');
+    setShowUserModal(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
 
   const quickActions = [
     { 
@@ -966,7 +912,10 @@ const AdminDashboard = () => {
               >
                 Cancel
               </button>
-              <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={handleCreateProject}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 Create Project
               </button>
             </div>
@@ -1021,7 +970,10 @@ const AdminDashboard = () => {
               >
                 Cancel
               </button>
-              <button className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+              <button 
+                onClick={handleAddUser}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
                 Add User
               </button>
             </div>

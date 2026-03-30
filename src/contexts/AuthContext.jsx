@@ -78,10 +78,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const googleLogin = async (idToken) => {
+  const googleLogin = async (idToken, role, departmentId = null) => {
     try {
       setLoading(true);
-      const response = await authService.googleLogin(idToken);
+      const response = await authService.googleLogin(idToken, role, departmentId);
       
       setUser(response.user);
       setIsAuthenticated(true);

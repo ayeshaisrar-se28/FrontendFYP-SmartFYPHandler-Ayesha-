@@ -69,7 +69,53 @@ const StudentDashboard = () => {
         }
       } catch (error) {
         console.error("Failed to fetch projects", error);
-        // Keep mock data or show error?
+        // Fallback to mock projects if API fails (e.g. for mock users)
+        setProjects([
+          { 
+            id: 201, 
+            title: 'Smart Agriculture IoT System', 
+            status: 'Completed', 
+            supervisor: 'Dr. Jane Smith', 
+            department: 'Software Engineering', 
+            year: 2023, 
+            supervisorName: 'Dr. Jane Smith',
+            students: ['Alice Green', 'Bob White'],
+            grade: 'A+',
+            batch: '2023',
+            semester: 'Spring',
+            views: 450,
+            downloads: 125,
+            isBookmarked: true,
+            description: 'An advanced IoT based system for monitoring soil moisture and automated irrigation.',
+            category: 'IoT & Embedded',
+            techStack: ['Arduino', 'React', 'Node.js', 'MQTT'],
+            features: ['Moisture Sensing', 'Automated Irrigation', 'Cloud Dashboard'],
+            outcomes: ['30% water saving', 'Better crop yield']
+          },
+          { 
+            id: 202, 
+            title: 'AI-Based Medical Diagnostic Tool', 
+            status: 'Active', 
+            supervisor: 'Dr. John Doe', 
+            department: 'Computer Science', 
+            year: 2024, 
+            supervisorName: 'Dr. John Doe',
+            students: ['Charlie Brown'],
+            grade: 'A',
+            batch: '2024',
+            semester: 'Fall',
+            views: 210,
+            downloads: 45,
+            isBookmarked: false,
+            description: 'A deep learning model to detect anomalies in X-ray images with high accuracy.',
+            category: 'Machine Learning/AI',
+            techStack: ['Python', 'TensorFlow', 'Flask'],
+            features: ['X-ray Analysis', 'Instant Reporting'],
+            outcomes: ['92% accuracy in testing']
+          }
+        ]);
+        
+        toast.error('Could not connect to backend, using demo data');
       } finally {
         setLoading(false);
       }
@@ -180,13 +226,22 @@ const StudentDashboard = () => {
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           {/* Welcome Section */}
-          <div className="mb-8 animate-fade-in">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Welcome back, {user?.firstName}! 👋
-            </h1>
-            <p className="text-xl text-gray-600">
-              Explore previous FYPs from senior batches. Check if your idea has been implemented before!
-            </p>
+          <div className="mb-8 animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                Welcome back, {user?.firstName}! 👋
+              </h1>
+              <p className="text-xl text-gray-600">
+                Explore previous FYPs from senior batches. Check if your idea has been implemented before!
+              </p>
+            </div>
+            <button
+              onClick={() => setShowNoveltyModal(true)}
+              className="flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 font-semibold text-lg flex-shrink-0 group"
+            >
+              <TrendingUp className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform" />
+              Check Idea Similarity
+            </button>
           </div>
 
           {/* Stats Grid */}
@@ -370,13 +425,16 @@ const StudentDashboard = () => {
                             </div>
                             <div className="flex items-center text-gray-600 text-sm mb-3">
                               <Users className="h-4 w-4 mr-1" />
-                              <span className="font-medium">{fyp.students && fyp.students.length > 0 ? fyp.students.join(', ') : 'N/A'}</span>
+                              <span className="font-medium">{fyp.students?.length > 0 ? fyp.students.join(', ') : 'N/A'}</span>
                               <span className="mx-2">•</span>
                               <User className="h-4 w-4 mr-1" />
-                              <span>{fyp.supervisor || 'N/A'}</span>
+                              <span>
+                                {fyp.status === 'Proposed' ? 'Proposed by: ' : ''}
+                                {fyp.supervisorName || fyp.supervisor || 'N/A'}
+                              </span>
                               <span className="mx-2">•</span>
                               <Building className="h-4 w-4 mr-1" />
-                              <span>{fyp.department}</span>
+                              <span>{fyp.departmentName || fyp.department || 'N/A'}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
@@ -398,24 +456,24 @@ const StudentDashboard = () => {
                           <div>
                             <h4 className="font-semibold text-gray-900 mb-2">Key Features</h4>
                             <ul className="text-sm text-gray-600 space-y-1">
-                              {fyp.features && fyp.features.slice(0, 3).map((feature, index) => (
+                              {fyp.features?.slice(0, 3).map((feature, index) => (
                                 <li key={index} className="flex items-start">
                                   <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 mr-2 flex-shrink-0"></span>
                                   {feature}
                                 </li>
-                              ))}
+                              )) || <li className="text-xs text-gray-500 italic">No features listed</li>}
                             </ul>
                           </div>
 
                           <div>
                             <h4 className="font-semibold text-gray-900 mb-2">Outcomes</h4>
                             <ul className="text-sm text-gray-600 space-y-1">
-                              {fyp.outcomes && fyp.outcomes.slice(0, 2).map((outcome, index) => (
+                              {fyp.outcomes?.slice(0, 2).map((outcome, index) => (
                                 <li key={index} className="flex items-start">
                                   <Award className="h-3 w-3 text-green-500 mt-1 mr-2 flex-shrink-0" />
                                   {outcome}
                                 </li>
-                              ))}
+                              )) || <li className="text-xs text-gray-500 italic">No outcomes listed</li>}
                             </ul>
                           </div>
                         </div>
@@ -494,7 +552,7 @@ const StudentDashboard = () => {
                           {fyp.title}
                         </h3>
                         <p className="text-sm text-gray-600 mb-3">
-                          <span className="font-medium">Students:</span> {fyp.students.join(', ')}
+                          <span className="font-medium">Students:</span> {fyp.students?.join(', ') || 'N/A'}
                         </p>
                         <div className="flex items-center justify-between">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getGradeColor(fyp.grade)}`}>

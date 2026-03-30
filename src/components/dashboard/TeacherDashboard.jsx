@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import projectService from '../../services/projectService';
+import rankingService from '../../services/rankingService';
 import {
   Users,
   BookOpen,
@@ -25,199 +27,310 @@ import {
   Target,
   Lightbulb,
   ChartBar,
-  Trophy
+  Trophy,
+  ChevronRight,
+  Search,
+  Bell,
+  MoreVertical,
+  ArrowRight
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const TeacherDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [statsData, setStatsData] = useState([]);
+  const [currentFYPs, setCurrentFYPs] = useState([]);
+  const [completedFYPs, setCompletedFYPs] = useState([]);
+  const [upcomingMeetings, setUpcomingMeetings] = useState([]);
+  const [researchInsights, setResearchInsights] = useState([]);
+  const [categories, setCategories] = useState([
+    'Machine Learning',
+    'Web Development',
+    'Mobile Development',
+    'IoT',
+    'Blockchain',
+    'Data Science',
+    'Cybersecurity',
+    'Cloud Computing',
+    'Artificial Intelligence',
+    'Game Development',
+    'AR/VR',
+    'Natural Language Processing',
+    'DevOps'
+  ]);
+  const [departments, setDepartments] = useState([
+    { id: 1, name: 'Computer Science' },
+    { id: 2, name: 'Software Engineering' },
+    { id: 3, name: 'Information Technology' },
+    { id: 4, name: 'Data Science' },
+    { id: 5, name: 'Cybersecurity' }
+  ]);
+  const [newProject, setNewProject] = useState({
+    title: '',
+    category: 'Machine Learning',
+    departmentId: 1,
+    year: new Date().getFullYear(),
+    semester: 'Fall 2024',
+    description: '',
+    objective: '',
+    expectedOutcomes: '',
+    studentLimit: 3
+  });
 
-  const stats = [
-    { 
-      name: 'Supervised FYPs', 
-      value: '45', 
-      icon: BookOpen, 
-      color: 'bg-blue-500', 
-      change: '+8 this year',
-      trend: 'up'
-    },
-    { 
-      name: 'Active Students', 
-      value: '72', 
-      icon: Users, 
-      color: 'bg-green-500', 
-      change: '24 teams total',
-      trend: 'up'
-    },
-    { 
-      name: 'Completed FYPs', 
-      value: '156', 
-      icon: CheckCircle, 
-      color: 'bg-purple-500', 
-      change: 'Since 2018',
-      trend: 'up'
-    },
-    { 
-      name: 'Success Rate', 
-      value: '94%', 
-      icon: TrendingUp, 
-      color: 'bg-orange-500', 
-      change: 'A grade or above',
-      trend: 'up'
-    },
-  ];
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedProjectForAssign, setSelectedProjectForAssign] = useState(null);
+  const [allStudents, setAllStudents] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [studentSearchTerm, setStudentSearchTerm] = useState('');
 
-  const currentFYPs = [
-    {
-      id: 1,
-      title: 'Smart Campus Energy Management System',
-      students: ['Ahmed Ali', 'Sara Khan', 'Hassan Malik'],
-      status: 'In Progress',
-      progress: 75,
-      lastUpdate: '2025-01-20',
-      category: 'IoT & Smart Systems',
-      nextMeeting: '2025-01-25',
-      semester: 'Spring 2025',
-      challenges: ['Hardware integration delays', 'Data visualization complexity'],
-      recentSubmissions: ['Literature Review', 'System Architecture'],
-      grade: 'A-',
-      expectedGrade: 'A',
-      riskLevel: 'low'
-    },
-    {
-      id: 2,
-      title: 'AI-Powered Fake News Detection',
-      students: ['Fatima Ahmed', 'Usman Sheikh'],
-      status: 'Review Required',
-      progress: 85,
-      lastUpdate: '2025-01-22',
-      category: 'Machine Learning',
-      nextMeeting: '2025-01-24',
-      semester: 'Spring 2025',
-      challenges: ['Model accuracy improvement needed', 'Dataset bias issues'],
-      recentSubmissions: ['ML Model Implementation', 'Testing Results'],
-      grade: 'A',
-      expectedGrade: 'A+',
-      riskLevel: 'medium'
-    },
-    {
-      id: 3,
-      title: 'Blockchain-based Supply Chain Tracking',
-      students: ['Ali Hassan', 'Zara Noor', 'Omar Farooq'],
-      status: 'Planning',
-      progress: 45,
-      lastUpdate: '2025-01-18',
-      category: 'Blockchain',
-      nextMeeting: '2025-01-26',
-      semester: 'Spring 2025',
-      challenges: ['Smart contract complexity', 'Industry partnership needed'],
-      recentSubmissions: ['Project Proposal', 'Technical Specifications'],
-      grade: 'B+',
-      expectedGrade: 'A-',
-      riskLevel: 'high'
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        // Fetch teacher's projects
+        const projects = await rankingService.getTeacherProjects(user.id || user._id);
+        
+        // Split projects into current and completed
+        const current = projects.filter(p => p.status === 'In Progress' || p.status === 'Active' || p.status === 'Review Required');
+        const completed = projects.filter(p => p.status === 'Completed');
+        
+        setCurrentFYPs(current);
+        setCompletedFYPs(completed);
+
+        // Fetch ranking stats for the current year
+        const currentYear = new Date().getFullYear();
+        let sFYPs = projects.length;
+        let aStudents = projects.reduce((acc, p) => acc + (p.students?.length || 0), 0);
+        let cFYPs = completed.length;
+        let sRate = projects.length > 0 ? Math.round((completed.length / projects.length) * 100) : 0;
+
+        try {
+          const rankingStats = await rankingService.getRankingStats(currentYear);
+          if (rankingStats) {
+            // Use system-wide stats for some context if needed, but keep teacher-specific stats primary
+          }
+        } catch (err) {
+          console.warn('Could not fetch ranking stats:', err);
+        }
+
+        setStatsData([
+          { name: 'Supervised FYPs', value: sFYPs.toString(), icon: BookOpen, color: 'bg-blue-500', change: `+${current.length} active`, trend: 'up' },
+          { name: 'Active Students', value: aStudents.toString(), icon: Users, color: 'bg-green-500', change: `${current.length} teams`, trend: 'up' },
+          { name: 'Completed FYPs', value: cFYPs.toString(), icon: CheckCircle, color: 'bg-purple-500', change: 'Lifetime', trend: 'up' },
+          { name: 'Success Rate', value: `${sRate}%`, icon: TrendingUp, color: 'bg-orange-500', change: 'Graduated', trend: 'up' },
+        ]);
+
+        // Mock additional data if API doesn't support yet
+        setUpcomingMeetings([
+          { id: 1, title: 'Weekly Progress Review', time: '10:00 AM', date: 'Today', students: ['Team Alpha'], type: 'progress', duration: '1 hour', agenda: ['Updates'] },
+          { id: 2, title: 'Technical Discussion', time: '2:00 PM', date: 'Tomorrow', students: ['Team Beta'], type: 'technical', duration: '45 mins', agenda: ['Review'] }
+        ]);
+
+        setResearchInsights([
+          { category: 'Machine Learning', projects: 12, avgGrade: 'A', successRate: '92%', trendingTopics: ['NLP', 'CV'], challenges: ['Data quality'] },
+          { category: 'Web Development', projects: 8, avgGrade: 'A-', successRate: '88%', trendingTopics: ['React', 'Node'], challenges: ['Security'] }
+        ]);
+
+        // Fetch Categories and Departments
+        try {
+          const [cats, depts] = await Promise.all([
+            projectService.getProjectCategories(),
+            projectService.getDepartments()
+          ]);
+          
+          if (cats && cats.length > 0) {
+            const apiCatNames = cats.map(c => c.name);
+            setCategories(prev => {
+              // Merge and remove duplicates
+              const combined = [...new Set([...prev, ...apiCatNames])];
+              return combined;
+            });
+            setNewProject(prev => ({ ...prev, category: apiCatNames[0] || prev.category }));
+          }
+          
+          if (depts && depts.length > 0) {
+            setDepartments(prev => {
+              // Merge and remove duplicates by ID
+              const existingIds = prev.map(d => d.id);
+              const newDepts = depts.filter(d => !existingIds.includes(d.id));
+              return [...prev, ...newDepts];
+            });
+            // Default new project to teacher's department if available
+            const userDeptId = user.departmentId || depts[0].id;
+            setNewProject(prev => ({ ...prev, departmentId: userDeptId }));
+          }
+        } catch (err) {
+          console.warn('Could not fetch categories or departments:', err);
+          // Fallback to defaults already set in useState or user profile
+          if (user.departmentId) {
+            setNewProject(prev => ({ ...prev, departmentId: user.departmentId }));
+          }
+        }
+
+      } catch (error) {
+        console.error('Error fetching teacher dashboard data:', error);
+        // Fallback to mock projects if API fails (e.g. for mock users)
+        const mockProjects = [
+          { 
+            id: 101, 
+            title: 'AI-Powered Resume Screener', 
+            status: 'In Progress', 
+            students: ['John Doe', 'Jane Smith'], 
+            semester: 'Spring 2024', 
+            riskLevel: 'Low', 
+            progress: 65,
+            grade: 'A',
+            expectedGrade: 'A',
+            nextMeeting: 'Tomorrow, 10:00 AM',
+            recentSubmissions: ['Proposal Document', 'Literature Review'],
+            challenges: ['Data collection delay'],
+            category: 'Machine Learning',
+            lastUpdate: '2 days ago'
+          },
+          { 
+            id: 102, 
+            title: 'Blockchain Voting System', 
+            status: 'Proposed', 
+            students: [], 
+            semester: 'Spring 2024', 
+            riskLevel: 'Medium', 
+            progress: 0,
+            grade: 'N/A',
+            expectedGrade: 'B+',
+            nextMeeting: 'Not scheduled',
+            recentSubmissions: [],
+            challenges: [],
+            category: 'Blockchain',
+            lastUpdate: '1 week ago'
+          }
+        ];
+        setCurrentFYPs(mockProjects);
+        setStatsData([
+          { name: 'Supervised FYPs', value: '2', icon: BookOpen, color: 'bg-blue-500', change: '+2 active', trend: 'up' },
+          { name: 'Active Students', value: '2', icon: Users, color: 'bg-green-500', change: '1 team', trend: 'up' },
+          { name: 'Completed FYPs', value: '0', icon: CheckCircle, color: 'bg-purple-500', change: 'Lifetime', trend: 'up' },
+          { name: 'Success Rate', value: '0%', icon: TrendingUp, color: 'bg-orange-500', change: 'Graduated', trend: 'up' },
+        ]);
+        toast.error('Could not connect to backend, using demo data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  const toggleStudent = (studentId) => {
+    setSelectedStudentIds(prev => 
+      prev.includes(studentId) 
+        ? prev.filter(id => id !== studentId) 
+        : [...prev, studentId]
+    );
+  };
+
+  const handleAssignStudents = async () => {
+    if (selectedStudentIds.length === 0) {
+      toast.error('Please select at least one student');
+      return;
     }
-  ];
 
-  const completedFYPs = [
-    {
-      id: 1,
-      title: 'AR Navigation System for Campus',
-      students: ['Ahmad Hassan', 'Fatima Khan'],
-      year: '2024',
-      semester: 'Spring',
-      finalGrade: 'A+',
-      category: 'Mobile Development',
-      outcome: 'Successfully deployed university-wide',
-      citations: 12,
-      impact: 'High'
-    },
-    {
-      id: 2,
-      title: 'Mental Health AI Assistant',
-      students: ['Ayesha Siddique', 'Omar Farooq'],
-      year: '2023',
-      semester: 'Spring',
-      finalGrade: 'A+',
-      category: 'Machine Learning',
-      outcome: 'Published in IEEE conference, 500+ active users',
-      citations: 8,
-      impact: 'High'
-    },
-    {
-      id: 3,
-      title: 'Smart Traffic Management IoT',
-      students: ['Bilal Khan', 'Saba Noor', 'Hamza Ali'],
-      year: '2023',
-      semester: 'Fall',
-      finalGrade: 'A',
-      category: 'IoT & Embedded',
-      outcome: 'Implemented at 5 city intersections',
-      citations: 5,
-      impact: 'Medium'
+    try {
+      // setLoading(true); // Don't block whole UI
+      await projectService.updateProject(selectedProjectForAssign.id, {
+        studentIds: selectedStudentIds
+      });
+      toast.success('Students assigned successfully! Project is now In Progress.');
+      setShowAssignModal(false);
+      setSelectedStudentIds([]);
+      // Refresh page to show updated status
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      toast.error('Failed to assign students');
     }
-  ];
+  };
 
-  const upcomingMeetings = [
-    {
-      id: 1,
-      title: 'Weekly Progress Review - Energy Management',
-      time: '10:00 AM',
-      date: 'Today',
-      students: ['Ahmed Ali', 'Sara Khan', 'Hassan Malik'],
-      type: 'progress',
-      duration: '1 hour',
-      agenda: ['Hardware integration update', 'Data visualization demo', 'Next week planning']
-    },
-    {
-      id: 2,
-      title: 'Fake News Detection - Model Review',
-      time: '2:00 PM',
-      date: 'Tomorrow',
-      students: ['Fatima Ahmed', 'Usman Sheikh'],
-      type: 'technical',
-      duration: '45 mins',
-      agenda: ['Model accuracy analysis', 'Dataset bias discussion', 'Performance optimization']
-    },
-    {
-      id: 3,
-      title: 'Blockchain Project - Industry Meeting',
-      time: '3:30 PM',
-      date: 'Jan 26',
-      students: ['Ali Hassan', 'Zara Noor', 'Omar Farooq'],
-      type: 'external',
-      duration: '2 hours',
-      agenda: ['Industry requirements review', 'Partnership discussion', 'Timeline adjustment']
-    }
-  ];
+    const fetchOptions = async () => {
+      try {
+        const [cats, depts, students] = await Promise.all([
+          projectService.getProjectCategories(),
+          projectService.getDepartments(),
+          projectService.getStudents()
+        ]);
+        
+        if (cats && cats.length > 0) {
+          setCategories(cats);
+          setNewProject(prev => ({ ...prev, category: cats[0] }));
+        }
+        
+        if (depts && depts.length > 0) {
+          setDepartments(depts);
+          if (!newProject.departmentId) {
+            setNewProject(prev => ({ ...prev, departmentId: depts[0].id }));
+          }
+        }
 
-  const researchInsights = [
-    {
-      category: 'Machine Learning',
-      projects: 18,
-      avgGrade: 'A-',
-      successRate: '95%',
-      trendingTopics: ['NLP', 'Computer Vision', 'Deep Learning'],
-      challenges: ['Data quality', 'Model interpretability', 'Computational resources']
-    },
-    {
-      category: 'Web Development',
-      projects: 24,
-      avgGrade: 'A',
-      successRate: '92%',
-      trendingTopics: ['React', 'Node.js', 'Cloud Computing'],
-      challenges: ['Scalability', 'Security', 'User experience']
-    },
-    {
-      category: 'IoT & Embedded',
-      projects: 15,
-      avgGrade: 'A-',
-      successRate: '90%',
-      trendingTopics: ['Smart Cities', 'Industry 4.0', 'Edge Computing'],
-      challenges: ['Hardware costs', 'Connectivity', 'Power management']
+        if (students && students.length > 0) {
+          setAllStudents(students);
+        }
+      } catch (error) {
+        console.error('Error fetching options:', error);
+      }
+    };
+
+    fetchDashboardData();
+    fetchOptions();
+  }, [user]);
+
+  const handleProposeFYP = async (e) => {
+    e?.preventDefault();
+    if (!newProject.title || !newProject.description) {
+      toast.error('Please fill in all required fields');
+      return;
     }
-  ];
+
+    try {
+      const projectData = {
+        ...newProject,
+        supervisorId: user.id || user._id,
+        year: parseInt(newProject.year)
+      };
+
+      await projectService.createProject(projectData);
+      toast.success('FYP Proposal submitted successfully!');
+      setShowCreateModal(false);
+      
+      // Reset form
+      setNewProject({
+        title: '',
+        description: '',
+        category: categories[0] || '',
+        departmentId: user?.departmentId || (departments[0]?.id || ''),
+        year: new Date().getFullYear(),
+        semester: 'Fall',
+        difficultyLevel: 'Medium',
+        studentIds: []
+      });
+
+      // Refresh project list
+      // fetchDashboardData is inside useEffect, we should probably extract it or just reload
+      window.location.reload(); 
+    } catch (error) {
+      console.error('Error proposing FYP:', error);
+      toast.error(error.response?.data?.message || 'Failed to submit proposal');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -239,6 +352,7 @@ const TeacherDashboard = () => {
   };
 
   const getGradeColor = (grade) => {
+    if (!grade) return 'bg-gray-100 text-gray-800';
     if (grade.startsWith('A')) return 'bg-green-100 text-green-800';
     if (grade.startsWith('B')) return 'bg-blue-100 text-blue-800';
     if (grade.startsWith('C')) return 'bg-yellow-100 text-yellow-800';
@@ -253,7 +367,7 @@ const TeacherDashboard = () => {
           <div className="mb-8 animate-fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                <h1 className="text-4xl font-bold text-gray-900 mb-2 flex items-center">
                   Welcome, Prof. {user?.lastName}! 👨‍🏫
                 </h1>
                 <p className="text-xl text-gray-600">
@@ -274,7 +388,7 @@ const TeacherDashboard = () => {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8 animate-slide-up">
-            {stats.map((item) => (
+            {statsData.map((item) => (
               <div key={item.name} className="bg-white overflow-hidden shadow-lg rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100">
                 <div className="p-6">
                   <div className="flex items-center">
@@ -363,7 +477,7 @@ const TeacherDashboard = () => {
                               </h3>
                               <div className="flex items-center text-sm text-gray-600 mb-2">
                                 <Users className="h-4 w-4 mr-1" />
-                                <span>{project.students.join(', ')}</span>
+                                <span>{project.students?.join(', ') || 'No students assigned'}</span>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -466,7 +580,7 @@ const TeacherDashboard = () => {
                               </div>
                               <div className="flex items-center">
                                 <Users className="h-3 w-3 mr-1" />
-                                {meeting.students.join(', ')}
+                                {meeting.students?.join(', ') || 'No students'}
                               </div>
                             </div>
                             <div className="mt-2">
@@ -515,7 +629,10 @@ const TeacherDashboard = () => {
                             <span className="text-xs text-gray-600">Check pending reviews</span>
                           </div>
                         </button>
-                        <button className="w-full flex items-center p-4 border border-gray-300 rounded-xl hover:bg-gradient-to-r hover:from-orange-50 hover:to-yellow-50 transition-all duration-200 hover:border-orange-300 group hover:shadow-md">
+                        <button 
+                          onClick={() => setShowCreateModal(true)}
+                          className="w-full flex items-center p-4 border border-gray-300 rounded-xl hover:bg-gradient-to-r hover:from-orange-50 hover:to-yellow-50 transition-all duration-200 hover:border-orange-300 group hover:shadow-md"
+                        >
                           <Lightbulb className="h-5 w-5 text-orange-500 mr-3 group-hover:scale-110 transition-transform" />
                           <div className="text-left">
                             <span className="text-sm font-semibold text-gray-900 block">Suggest FYP Ideas</span>
@@ -578,13 +695,25 @@ const TeacherDashboard = () => {
                           <div className="flex items-center text-gray-600 text-sm mb-4">
                             <Users className="h-4 w-4 mr-2" />
                             <span className="font-medium">Team:</span>
-                            <span className="ml-1">{project.students.join(', ')}</span>
+                            <span className="ml-1">{project.students?.join(', ') || 'No students assigned'}</span>
                             <span className="mx-3">•</span>
                             <GraduationCap className="h-4 w-4 mr-1" />
                             <span>{project.semester}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {project.status === 'Proposed' && (
+                            <button 
+                              onClick={() => {
+                                setSelectedProjectForAssign(project);
+                                setShowAssignModal(true);
+                              }}
+                              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium mr-2"
+                            >
+                              <Users className="h-4 w-4 mr-2" />
+                              Assign Group
+                            </button>
+                          )}
                           <button className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
                             <Eye className="h-5 w-5" />
                           </button>
@@ -636,23 +765,23 @@ const TeacherDashboard = () => {
                         <div>
                           <div className="text-sm text-gray-600 mb-2">Recent Submissions</div>
                           <div className="space-y-1">
-                            {project.recentSubmissions.map((submission, i) => (
+                            {project.recentSubmissions?.map((submission, i) => (
                               <div key={i} className="flex items-center text-sm text-gray-700">
                                 <CheckCircle className="h-3 w-3 text-green-500 mr-2" />
                                 {submission}
                               </div>
-                            ))}
+                            )) || <p className="text-xs text-gray-500">No recent submissions</p>}
                           </div>
                         </div>
                         <div>
                           <div className="text-sm text-gray-600 mb-2">Current Challenges</div>
                           <div className="space-y-1">
-                            {project.challenges.map((challenge, i) => (
+                            {project.challenges?.map((challenge, i) => (
                               <div key={i} className="flex items-center text-sm text-gray-700">
                                 <AlertCircle className="h-3 w-3 text-orange-500 mr-2" />
                                 {challenge}
                               </div>
-                            ))}
+                            )) || <p className="text-xs text-gray-500">No active challenges</p>}
                           </div>
                         </div>
                       </div>
@@ -914,29 +1043,89 @@ const TeacherDashboard = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 animate-slide-up">
             <h3 className="text-xl font-bold text-gray-900 mb-6">Propose New FYP</h3>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">FYP Title</label>
-                <input type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                <label className="block text-sm font-medium text-gray-700 mb-2">FYP Title *</label>
+                <input 
+                  type="text" 
+                  value={newProject.title}
+                  onChange={(e) => setNewProject({...newProject, title: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                  placeholder="Enter project title"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                  <select 
+                    value={newProject.category}
+                    onChange={(e) => setNewProject({...newProject, category: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Department *</label>
+                  <select 
+                    value={newProject.departmentId}
+                    onChange={(e) => setNewProject({...newProject, departmentId: parseInt(e.target.value)})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Year *</label>
+                  <input 
+                    type="number" 
+                    value={newProject.year}
+                    onChange={(e) => setNewProject({...newProject, year: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Semester *</label>
+                  <select 
+                    value={newProject.semester}
+                    onChange={(e) => setNewProject({...newProject, semester: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Fall">Fall</option>
+                    <option value="Spring">Spring</option>
+                    <option value="Summer">Summer</option>
+                  </select>
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                <select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <option>Web Development</option>
-                  <option>Mobile Development</option>
-                  <option>Machine Learning</option>
-                  <option>IoT & Embedded</option>
-                  <option>Blockchain</option>
-                  <option>Data Science</option>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty Level</label>
+                <select 
+                  value={newProject.difficultyLevel}
+                  onChange={(e) => setNewProject({...newProject, difficultyLevel: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea rows="3" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Required Skills</label>
-                <input type="text" placeholder="e.g., React, Python, Machine Learning" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
+                <textarea 
+                  rows="3" 
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({...newProject, description: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Describe the project goal and scope"
+                  required
+                ></textarea>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
@@ -946,8 +1135,94 @@ const TeacherDashboard = () => {
               >
                 Cancel
               </button>
-              <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+              <button 
+                onClick={handleProposeFYP}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
                 Propose FYP
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Group Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 animate-slide-up">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Assign Student Group</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Project: <span className="font-semibold text-blue-600">{selectedProjectForAssign?.title}</span>
+            </p>
+            
+            <div className="relative mb-4">
+              <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="Search students by name or ID..."
+                value={studentSearchTerm}
+                onChange={(e) => setStudentSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg mb-6">
+              {allStudents
+                .filter(s => 
+                  `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+                  s.studentId?.toLowerCase().includes(studentSearchTerm.toLowerCase())
+                )
+                .map(student => (
+                  <div 
+                    key={student.id} 
+                    onClick={() => toggleStudent(student.id)}
+                    className={`p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-0 ${
+                      selectedStudentIds.includes(student.id) ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                        selectedStudentIds.includes(student.id) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {student.firstName ? student.firstName[0] : ''}{student.lastName ? student.lastName[0] : ''}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{student.firstName} {student.lastName}</p>
+                        <p className="text-xs text-gray-500">{student.studentId || 'No ID'}</p>
+                      </div>
+                    </div>
+                    {selectedStudentIds.includes(student.id) && (
+                      <CheckCircle className="h-5 w-5 text-blue-600" />
+                    )}
+                  </div>
+                ))}
+              {allStudents.filter(s => 
+                  `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
+                  s.studentId?.toLowerCase().includes(studentSearchTerm.toLowerCase())
+                ).length === 0 && (
+                  <div className="p-8 text-center text-gray-500">
+                    No students found searching "{studentSearchTerm}"
+                  </div>
+                )}
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setShowAssignModal(false);
+                  setSelectedStudentIds([]);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAssignStudents}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                disabled={loading || selectedStudentIds.length === 0}
+              >
+                {loading ? 'Assigning...' : 'Confirm Assignment'}
               </button>
             </div>
           </div>
