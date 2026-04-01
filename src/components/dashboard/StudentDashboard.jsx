@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import NoveltyCheckModal from './NoveltyCheckModal';
+import ChangePasswordModal from '../auth/ChangePasswordModal';
 import projectService from '../../services/projectService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -25,7 +27,8 @@ import {
   Award,
   Code,
   FileText,
-  Brain
+  Brain,
+  Settings
 } from 'lucide-react';
 
 const StudentDashboard = () => {
@@ -40,6 +43,7 @@ const StudentDashboard = () => {
 
   const [sortBy, setSortBy] = useState('relevance');
   const [showNoveltyModal, setShowNoveltyModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [projects, setProjects] = useState([]);
   const [dashboardStats, setDashboardStats] = useState({
     totalProjects: 0,
@@ -69,53 +73,8 @@ const StudentDashboard = () => {
         }
       } catch (error) {
         console.error("Failed to fetch projects", error);
-        // Fallback to mock projects if API fails (e.g. for mock users)
-        setProjects([
-          { 
-            id: 201, 
-            title: 'Smart Agriculture IoT System', 
-            status: 'Completed', 
-            supervisor: 'Dr. Jane Smith', 
-            department: 'Software Engineering', 
-            year: 2023, 
-            supervisorName: 'Dr. Jane Smith',
-            students: ['Alice Green', 'Bob White'],
-            grade: 'A+',
-            batch: '2023',
-            semester: 'Spring',
-            views: 450,
-            downloads: 125,
-            isBookmarked: true,
-            description: 'An advanced IoT based system for monitoring soil moisture and automated irrigation.',
-            category: 'IoT & Embedded',
-            techStack: ['Arduino', 'React', 'Node.js', 'MQTT'],
-            features: ['Moisture Sensing', 'Automated Irrigation', 'Cloud Dashboard'],
-            outcomes: ['30% water saving', 'Better crop yield']
-          },
-          { 
-            id: 202, 
-            title: 'AI-Based Medical Diagnostic Tool', 
-            status: 'Active', 
-            supervisor: 'Dr. John Doe', 
-            department: 'Computer Science', 
-            year: 2024, 
-            supervisorName: 'Dr. John Doe',
-            students: ['Charlie Brown'],
-            grade: 'A',
-            batch: '2024',
-            semester: 'Fall',
-            views: 210,
-            downloads: 45,
-            isBookmarked: false,
-            description: 'A deep learning model to detect anomalies in X-ray images with high accuracy.',
-            category: 'Machine Learning/AI',
-            techStack: ['Python', 'TensorFlow', 'Flask'],
-            features: ['X-ray Analysis', 'Instant Reporting'],
-            outcomes: ['92% accuracy in testing']
-          }
-        ]);
-        
-        toast.error('Could not connect to backend, using demo data');
+        toast.error('Could not connect to backend. Please check your connection.');
+        setProjects([]);
       } finally {
         setLoading(false);
       }
@@ -235,13 +194,22 @@ const StudentDashboard = () => {
                 Explore previous FYPs from senior batches. Check if your idea has been implemented before!
               </p>
             </div>
-            <button
-              onClick={() => setShowNoveltyModal(true)}
-              className="flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 font-semibold text-lg flex-shrink-0 group"
-            >
-              <TrendingUp className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform" />
-              Check Idea Similarity
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowNoveltyModal(true)}
+                className="flex items-center justify-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 font-semibold text-lg flex-shrink-0 group"
+              >
+                <TrendingUp className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform" />
+                Check Idea Similarity
+              </button>
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                title="Account Settings"
+                className="flex items-center justify-center px-4 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md font-semibold group flex-shrink-0"
+              >
+                <Settings className="h-5 w-5 group-hover:rotate-45 transition-transform duration-300" />
+              </button>
+            </div>
           </div>
 
           {/* Stats Grid */}
@@ -490,11 +458,19 @@ const StudentDashboard = () => {
                         </div>
 
                         <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200">
-                          <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                          <button 
+                            disabled={!fyp.documentUrl}
+                            onClick={() => fyp.documentUrl && window.open(fyp.documentUrl, '_blank')}
+                            className={`flex items-center px-4 py-2 rounded-lg transition-colors text-sm font-medium ${fyp.documentUrl ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                          >
                             <FileText className="h-4 w-4 mr-2" />
                             View Document
                           </button>
-                          <button className="flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium">
+                          <button 
+                            disabled={!fyp.sourceCodeUrl}
+                            onClick={() => fyp.sourceCodeUrl && window.open(fyp.sourceCodeUrl, '_blank')}
+                            className={`flex items-center px-4 py-2 border rounded-lg transition-colors text-sm font-medium ${fyp.sourceCodeUrl ? 'border-gray-300 text-gray-700 hover:bg-gray-50' : 'border-gray-200 text-gray-400 cursor-not-allowed'}`}
+                          >
                             <Code className="h-4 w-4 mr-2" />
                             Source Code
                           </button>
@@ -622,11 +598,14 @@ const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* Novelty Check Modal */}
-      <NoveltyCheckModal
-        isOpen={showNoveltyModal}
-        onClose={() => setShowNoveltyModal(false)}
-      />
+      {/* Modals */}
+      {showNoveltyModal && (
+        <NoveltyCheckModal onClose={() => setShowNoveltyModal(false)} />
+      )}
+      
+      {showSettingsModal && (
+        <ChangePasswordModal onClose={() => setShowSettingsModal(false)} />
+      )}
     </div>
   );
 };

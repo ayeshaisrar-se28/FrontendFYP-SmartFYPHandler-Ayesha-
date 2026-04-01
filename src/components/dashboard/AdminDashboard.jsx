@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import projectService from '../../services/projectService';
 import rankingService from '../../services/rankingService';
+import api from '../../services/api';
+import ChangePasswordModal from '../auth/ChangePasswordModal';
 import { 
   Users, 
   BookOpen, 
@@ -41,12 +43,26 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [systemStats, setSystemStats] = useState([]);
   const [departmentStats, setDepartmentStats] = useState([]);
   const [recentActivities, setRecentActivities] = useState([]);
   const [systemMetrics, setSystemMetrics] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [dbDepartments, setDbDepartments] = useState([]);
+  
+  const [newUser, setNewUser] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    role: 1, // Default student
+    departmentId: null,
+    department: '',
+    password: 'DefaultPassword123!',
+    studentId: `STD${Math.floor(Math.random() * 10000)}` 
+  });
+  const [isSubmittingUser, setIsSubmittingUser] = useState(false);
 
   useEffect(() => {
     const fetchAdminData = async () => {
@@ -56,10 +72,10 @@ const AdminDashboard = () => {
         const stats = await projectService.getDashboardStats();
         
         setSystemStats([
-          { name: 'Total Projects', value: stats.totalProjects.toString(), icon: BookOpen, color: 'bg-blue-500', change: '+12% from last month', trend: 'up', percentage: 12 },
-          { name: 'Active Students', value: stats.activeStudents.toString(), icon: GraduationCap, color: 'bg-green-500', change: '+8% growth', trend: 'up', percentage: 8 },
-          { name: 'Faculty Members', value: '42', icon: Users, color: 'bg-purple-500', change: '8 departments', trend: 'neutral', percentage: 0 },
-          { name: 'System Alerts', value: '3', icon: AlertTriangle, color: 'bg-orange-500', change: '2 pending review', trend: 'down', percentage: -5 },
+          { name: 'Total Projects', value: stats.totalProjects.toString(), icon: BookOpen, color: 'bg-blue-500', change: 'Total archived', trend: 'neutral', percentage: 0 },
+          { name: 'Active Students', value: stats.studentCount.toString(), icon: GraduationCap, color: 'bg-green-500', change: 'Enrolled', trend: 'up', percentage: 0 },
+          { name: 'Faculty Members', value: stats.facultyCount.toString(), icon: Users, color: 'bg-purple-500', change: 'Supervisors', trend: 'neutral', percentage: 0 },
+          { name: 'System Alerts', value: stats.pendingProjectsCount.toString(), icon: AlertTriangle, color: 'bg-orange-500', change: 'Pending review', trend: 'up', percentage: 0 },
         ]);
 
         // Fetch department rankings/stats
@@ -78,56 +94,73 @@ const AdminDashboard = () => {
           })));
         }
 
-        // Mock remaining data for now
-        setRecentActivities([
-          { id: 1, action: 'New project proposed', user: 'Dr. Smith', details: 'Smart Agriculture', time: '10m ago', type: 'project', status: 'pending' },
-          { id: 2, action: 'Admin login', user: 'Admin', details: 'System access', time: '1h ago', type: 'system', status: 'success' }
-        ]);
+        // Fetch real pending projects
+        try {
+          const pending = await projectService.searchProjects({ status: 'Proposed', pageSize: 10 });
+          if (pending && pending.data && pending.data.items) {
+            setPendingApprovals(pending.data.items.map(p => ({
+              id: p.id,
+              type: 'Project Proposal',
+              title: p.title,
+              submittedBy: p.supervisorName || 'Unknown',
+              department: p.departmentName || 'N/A',
+              submittedDate: new Date(p.createdAt).toLocaleDateString(),
+              priority: p.difficultyLevel === 'Hard' ? 'high' : 'medium'
+            })));
+          }
+        } catch (err) {
+          console.error("Failed to fetch pending projects", err);
+        }
+
+        // Fetch real recent activities (latest projects)
+        try {
+          const recent = await projectService.searchProjects({ pageSize: 5 });
+          if (recent && recent.data && recent.data.items) {
+            setRecentActivities(recent.data.items.map(p => ({
+              id: p.id,
+              action: 'New project posted',
+              user: p.supervisorName || 'Teacher',
+              details: p.title,
+              time: 'Recently',
+              type: 'project',
+              status: 'success'
+            })));
+          }
+        } catch (err) {
+          console.error("Failed to fetch recent activities", err);
+        }
 
         setSystemMetrics([
-          { label: 'Projects Completed', value: stats.completedProjects, total: stats.totalProjects, color: 'bg-green-500' },
+          { label: 'Projects Completed', value: stats.completedProjectsCount, total: stats.totalProjects || 1, color: 'bg-green-500' },
           { label: 'System Uptime', value: 99.9, total: 100, color: 'bg-emerald-500' },
           { label: 'Avg Project Grade', value: 3.8, total: 4.0, color: 'bg-blue-500' }
         ]);
 
-        setPendingApprovals([
-          { id: 1, type: 'Project Proposal', title: 'AI for Healthcare', submittedBy: 'Dr. Jones', department: 'CS', submittedDate: '2025-01-20', priority: 'high' }
-        ]);
+        // Fetch departments for the add user dropdown
+        try {
+          const depts = await projectService.getDepartments();
+          if (depts && depts.length > 0) {
+            setDbDepartments(depts);
+            setNewUser(prev => ({ 
+              ...prev, 
+              department: depts[0].name, 
+              departmentId: depts[0].id 
+            }));
+          }
+        } catch (e) {
+          console.error('Failed to load departments', e);
+        }
 
       } catch (error) {
         console.error('Error fetching admin dashboard data:', error);
-        toast.error('Using demo data for admin dashboard');
+        toast.error('Could not connect to backend. System metrics unavailable.');
         
-        // Comprehensive mock data fallback
-        setSystemStats([
-          { name: 'Total Projects', value: '248', icon: BookOpen, color: 'bg-blue-500', change: '+12% from last month', trend: 'up', percentage: 12 },
-          { name: 'Active Students', value: '1,247', icon: GraduationCap, color: 'bg-green-500', change: '+8% growth', trend: 'up', percentage: 8 },
-          { name: 'Faculty Members', value: '42', icon: Users, color: 'bg-purple-500', change: '8 departments', trend: 'neutral', percentage: 0 },
-          { name: 'System Alerts', value: '3', icon: AlertTriangle, color: 'bg-orange-500', change: '2 pending review', trend: 'down', percentage: -5 },
-        ]);
-
-        setDepartmentStats([
-          { name: 'Computer Science', projects: 85, students: 240, faculty: 12, completion: 92, performance: 'excellent', growth: 15 },
-          { name: 'Software Engineering', projects: 62, students: 180, faculty: 9, completion: 88, performance: 'good', growth: 10 },
-          { name: 'Information Technology', projects: 45, students: 120, faculty: 7, completion: 85, performance: 'good', growth: 8 }
-        ]);
-
-        setRecentActivities([
-          { id: 1, action: 'New project proposed', user: 'Dr. Johnson', details: 'AI Resume Screener', time: '10m ago', type: 'project', status: 'pending' },
-          { id: 2, action: 'Admin login', user: 'Michael Admin', details: 'System access', time: '1h ago', type: 'system', status: 'success' },
-          { id: 3, action: 'Project approved', user: 'Admin', details: 'Blockchain Voting', time: '2h ago', type: 'project', status: 'success' }
-        ]);
-
-        setSystemMetrics([
-          { label: 'Projects Completed', value: 89, total: 248, color: 'bg-green-500' },
-          { label: 'System Uptime', value: 99.9, total: 100, color: 'bg-emerald-500' },
-          { label: 'Avg Project Grade', value: 3.8, total: 4.0, color: 'bg-blue-500' }
-        ]);
-
-        setPendingApprovals([
-          { id: 1, type: 'Project Proposal', title: 'Smart Health Monitoring', submittedBy: 'Dr. Sarah', department: 'SE', submittedDate: '2025-01-25', priority: 'high' },
-          { id: 2, type: 'User Registration', title: 'New Faculty Account', submittedBy: 'Prof. Wilson', department: 'CS', submittedDate: '2025-01-26', priority: 'medium' }
-        ]);
+        // Reset states to empty or zero to avoid showing stale demo data
+        setSystemStats([]);
+        setDepartmentStats([]);
+        setRecentActivities([]);
+        setSystemMetrics([]);
+        setPendingApprovals([]);
       } finally {
         setLoading(false);
       }
@@ -142,10 +175,34 @@ const AdminDashboard = () => {
     setShowCreateModal(false);
   };
 
-  const handleAddUser = (e) => {
+  const handleAddUser = async (e) => {
     e?.preventDefault();
-    toast.success('User added successfully!');
-    setShowUserModal(false);
+    if (!newUser.firstName || !newUser.lastName || !newUser.email) {
+      toast.error('First name, last name, and email are required');
+      return;
+    }
+
+    try {
+      setIsSubmittingUser(true);
+      // We call the register API directly, avoiding the authService which would mistakenly log the admin out!
+      await api.post('/auth/register', newUser);
+      
+      toast.success('User added successfully!');
+      setShowUserModal(false);
+      
+      // Clear form
+      setNewUser(prev => ({
+        ...prev,
+        firstName: '',
+        lastName: '',
+        email: '',
+        studentId: `STD${Math.floor(Math.random() * 10000)}`
+      }));
+    } catch (error) {
+       toast.error(error.response?.data?.message || 'Failed to add user. Email may exist.');
+    } finally {
+      setIsSubmittingUser(false);
+    }
   };
 
   if (loading) {
@@ -174,7 +231,7 @@ const AdminDashboard = () => {
       name: 'System Settings', 
       icon: Settings, 
       color: 'bg-purple-500', 
-      action: () => {} 
+      action: () => setShowSettingsModal(true) 
     },
     { 
       name: 'Generate Report', 
@@ -244,6 +301,13 @@ const AdminDashboard = () => {
                 >
                   <Plus className="h-5 w-5 mr-2" />
                   New Project
+                </button>
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  title="Account Settings"
+                  className="flex items-center justify-center px-4 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md font-semibold group flex-shrink-0"
+                >
+                  <Settings className="h-5 w-5 group-hover:rotate-45 transition-transform duration-300" />
                 </button>
               </div>
             </div>
@@ -932,53 +996,101 @@ const AdminDashboard = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-                  <input type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  <input 
+                    type="text" 
+                    value={newUser.firstName}
+                    onChange={(e) => setNewUser({...newUser, firstName: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    placeholder="Enter first name"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-                  <input type="text" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                  <input 
+                    type="text" 
+                    value={newUser.lastName}
+                    onChange={(e) => setNewUser({...newUser, lastName: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    placeholder="Enter last name"
+                  />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                <input type="email" className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                <input 
+                  type="email" 
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                  placeholder="Enter email address"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-                  <select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option>Student</option>
-                    <option>Teacher</option>
-                    <option>Admin</option>
+                  <select 
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({...newUser, role: parseInt(e.target.value)})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={1}>Student</option>
+                    <option value={2}>Teacher</option>
+                    <option value={3}>Admin</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                  <select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option>Computer Science</option>
-                    <option>Software Engineering</option>
-                    <option>Information Technology</option>
-                    <option>Data Science</option>
+                  <select 
+                    value={newUser.departmentId || ''}
+                    onChange={(e) => {
+                      const deptId = e.target.value ? Number(e.target.value) : null;
+                      const dept = dbDepartments.find(d => d.id === deptId);
+                      setNewUser(prev => ({
+                        ...prev,
+                        department: dept ? dept.name : '',
+                        departmentId: deptId
+                      }));
+                    }}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {dbDepartments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                    {dbDepartments.length === 0 && <option value="">Loading...</option>}
                   </select>
                 </div>
               </div>
+              
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100 flex items-start gap-3 mt-4">
+                <AlertTriangle className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-800">
+                  New users are created with a default password of <span className="font-mono font-bold">DefaultPassword123!</span>. Please instruct them to change it upon first login.
+                </p>
+              </div>
+
             </div>
             <div className="flex gap-3 mt-6">
               <button 
                 onClick={() => setShowUserModal(false)}
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isSubmittingUser}
               >
                 Cancel
               </button>
               <button 
                 onClick={handleAddUser}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                disabled={isSubmittingUser}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                Add User
+                {isSubmittingUser ? 'Adding...' : 'Add User'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showSettingsModal && (
+        <ChangePasswordModal onClose={() => setShowSettingsModal(false)} />
       )}
     </div>
   );

@@ -38,8 +38,12 @@ const Register = () => {
         const depts = await projectService.getDepartments();
         if (depts && depts.length > 0) {
           setDbDepartments(depts);
-          if (!formData.department) {
-            setFormData(prev => ({ ...prev, department: depts[0].id }));
+          if (!formData.departmentId) {
+            setFormData(prev => ({ 
+              ...prev, 
+              department: depts[0].name,
+              departmentId: depts[0].id 
+            }));
           }
         }
       } catch (error) {
@@ -244,13 +248,14 @@ const Register = () => {
                   id="department"
                   name="department"
                   required
-                  value={formData.department}
+                  value={formData.departmentId || ''}
                   onChange={(e) => {
-                    const dept = dbDepartments.find(d => d.name === e.target.value);
+                    const deptId = e.target.value ? Number(e.target.value) : null;
+                    const dept = dbDepartments.find(d => d.id === deptId);
                     setFormData(prev => ({
                       ...prev,
-                      department: e.target.value,
-                      departmentId: dept ? dept.id : null
+                      department: dept ? dept.name : '',
+                      departmentId: deptId
                     }));
                   }}
                   className="appearance-none relative block w-full pl-10 pr-3 py-2 border border-gray-300 bg-white rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"

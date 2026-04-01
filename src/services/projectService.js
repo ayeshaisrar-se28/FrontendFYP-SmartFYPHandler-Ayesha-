@@ -44,8 +44,16 @@ const projectService = {
      */
     getProjectCategories: async () => {
         try {
-            const response = await api.get('/projects/categories');
-            return response.data.data;
+            // Replaced API call since Categories is just a text field in FYPProject schema.
+            return [
+                { id: 1, name: 'Machine Learning' },
+                { id: 2, name: 'Web Development' },
+                { id: 3, name: 'Mobile Development' },
+                { id: 4, name: 'IoT' },
+                { id: 5, name: 'Blockchain' },
+                { id: 6, name: 'Data Science' },
+                { id: 7, name: 'Cybersecurity' }
+            ];
         } catch (error) {
             console.error('Error fetching categories:', error);
             return [];

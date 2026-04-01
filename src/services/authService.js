@@ -246,5 +246,20 @@ export const authService = {
   hasAnyRole: (requiredRoles) => {
     const user = authService.getStoredUser();
     return requiredRoles.includes(user?.role);
+  },
+
+  changePassword: async (oldPassword, newPassword) => {
+    try {
+      const response = await api.post('/auth/change-password', {
+        oldPassword,
+        newPassword
+      });
+      return response.data;
+    } catch (error) {
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw new Error(error.message || 'Failed to change password');
+    }
   }
 };

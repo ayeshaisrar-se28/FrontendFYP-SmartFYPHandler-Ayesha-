@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import projectService from '../../services/projectService';
 import rankingService from '../../services/rankingService';
+import ChangePasswordModal from '../auth/ChangePasswordModal';
 import {
   Users,
   BookOpen,
@@ -32,7 +33,8 @@ import {
   Search,
   Bell,
   MoreVertical,
-  ArrowRight
+  ArrowRight,
+  Settings
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -41,6 +43,7 @@ const TeacherDashboard = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statsData, setStatsData] = useState([]);
   const [currentFYPs, setCurrentFYPs] = useState([]);
@@ -78,7 +81,9 @@ const TeacherDashboard = () => {
     description: '',
     objective: '',
     expectedOutcomes: '',
-    studentLimit: 3
+    studentLimit: 3,
+    documentUrl: '',
+    sourceCodeUrl: ''
   });
 
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -87,141 +92,16 @@ const TeacherDashboard = () => {
   const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [studentSearchTerm, setStudentSearchTerm] = useState('');
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        // Fetch teacher's projects
-        const projects = await rankingService.getTeacherProjects(user.id || user._id);
-        
-        // Split projects into current and completed
-        const current = projects.filter(p => p.status === 'In Progress' || p.status === 'Active' || p.status === 'Review Required');
-        const completed = projects.filter(p => p.status === 'Completed');
-        
-        setCurrentFYPs(current);
-        setCompletedFYPs(completed);
-
-        // Fetch ranking stats for the current year
-        const currentYear = new Date().getFullYear();
-        let sFYPs = projects.length;
-        let aStudents = projects.reduce((acc, p) => acc + (p.students?.length || 0), 0);
-        let cFYPs = completed.length;
-        let sRate = projects.length > 0 ? Math.round((completed.length / projects.length) * 100) : 0;
-
-        try {
-          const rankingStats = await rankingService.getRankingStats(currentYear);
-          if (rankingStats) {
-            // Use system-wide stats for some context if needed, but keep teacher-specific stats primary
-          }
-        } catch (err) {
-          console.warn('Could not fetch ranking stats:', err);
-        }
-
-        setStatsData([
-          { name: 'Supervised FYPs', value: sFYPs.toString(), icon: BookOpen, color: 'bg-blue-500', change: `+${current.length} active`, trend: 'up' },
-          { name: 'Active Students', value: aStudents.toString(), icon: Users, color: 'bg-green-500', change: `${current.length} teams`, trend: 'up' },
-          { name: 'Completed FYPs', value: cFYPs.toString(), icon: CheckCircle, color: 'bg-purple-500', change: 'Lifetime', trend: 'up' },
-          { name: 'Success Rate', value: `${sRate}%`, icon: TrendingUp, color: 'bg-orange-500', change: 'Graduated', trend: 'up' },
-        ]);
-
-        // Mock additional data if API doesn't support yet
-        setUpcomingMeetings([
-          { id: 1, title: 'Weekly Progress Review', time: '10:00 AM', date: 'Today', students: ['Team Alpha'], type: 'progress', duration: '1 hour', agenda: ['Updates'] },
-          { id: 2, title: 'Technical Discussion', time: '2:00 PM', date: 'Tomorrow', students: ['Team Beta'], type: 'technical', duration: '45 mins', agenda: ['Review'] }
-        ]);
-
-        setResearchInsights([
-          { category: 'Machine Learning', projects: 12, avgGrade: 'A', successRate: '92%', trendingTopics: ['NLP', 'CV'], challenges: ['Data quality'] },
-          { category: 'Web Development', projects: 8, avgGrade: 'A-', successRate: '88%', trendingTopics: ['React', 'Node'], challenges: ['Security'] }
-        ]);
-
-        // Fetch Categories and Departments
-        try {
-          const [cats, depts] = await Promise.all([
-            projectService.getProjectCategories(),
-            projectService.getDepartments()
-          ]);
-          
-          if (cats && cats.length > 0) {
-            const apiCatNames = cats.map(c => c.name);
-            setCategories(prev => {
-              // Merge and remove duplicates
-              const combined = [...new Set([...prev, ...apiCatNames])];
-              return combined;
-            });
-            setNewProject(prev => ({ ...prev, category: apiCatNames[0] || prev.category }));
-          }
-          
-          if (depts && depts.length > 0) {
-            setDepartments(prev => {
-              // Merge and remove duplicates by ID
-              const existingIds = prev.map(d => d.id);
-              const newDepts = depts.filter(d => !existingIds.includes(d.id));
-              return [...prev, ...newDepts];
-            });
-            // Default new project to teacher's department if available
-            const userDeptId = user.departmentId || depts[0].id;
-            setNewProject(prev => ({ ...prev, departmentId: userDeptId }));
-          }
-        } catch (err) {
-          console.warn('Could not fetch categories or departments:', err);
-          // Fallback to defaults already set in useState or user profile
-          if (user.departmentId) {
-            setNewProject(prev => ({ ...prev, departmentId: user.departmentId }));
-          }
-        }
-
-      } catch (error) {
-        console.error('Error fetching teacher dashboard data:', error);
-        // Fallback to mock projects if API fails (e.g. for mock users)
-        const mockProjects = [
-          { 
-            id: 101, 
-            title: 'AI-Powered Resume Screener', 
-            status: 'In Progress', 
-            students: ['John Doe', 'Jane Smith'], 
-            semester: 'Spring 2024', 
-            riskLevel: 'Low', 
-            progress: 65,
-            grade: 'A',
-            expectedGrade: 'A',
-            nextMeeting: 'Tomorrow, 10:00 AM',
-            recentSubmissions: ['Proposal Document', 'Literature Review'],
-            challenges: ['Data collection delay'],
-            category: 'Machine Learning',
-            lastUpdate: '2 days ago'
-          },
-          { 
-            id: 102, 
-            title: 'Blockchain Voting System', 
-            status: 'Proposed', 
-            students: [], 
-            semester: 'Spring 2024', 
-            riskLevel: 'Medium', 
-            progress: 0,
-            grade: 'N/A',
-            expectedGrade: 'B+',
-            nextMeeting: 'Not scheduled',
-            recentSubmissions: [],
-            challenges: [],
-            category: 'Blockchain',
-            lastUpdate: '1 week ago'
-          }
-        ];
-        setCurrentFYPs(mockProjects);
-        setStatsData([
-          { name: 'Supervised FYPs', value: '2', icon: BookOpen, color: 'bg-blue-500', change: '+2 active', trend: 'up' },
-          { name: 'Active Students', value: '2', icon: Users, color: 'bg-green-500', change: '1 team', trend: 'up' },
-          { name: 'Completed FYPs', value: '0', icon: CheckCircle, color: 'bg-purple-500', change: 'Lifetime', trend: 'up' },
-          { name: 'Success Rate', value: '0%', icon: TrendingUp, color: 'bg-orange-500', change: 'Graduated', trend: 'up' },
-        ]);
-        toast.error('Could not connect to backend, using demo data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Manage FYP Modal (status update + student details + progress)
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [managedProject, setManagedProject] = useState(null);
+  const [manageLoading, setManageLoading] = useState(false);
+  const [manageForm, setManageForm] = useState({
+    status: 'In Progress',
+    progressNote: '',
+    progressPercent: 0,
+    studentDetails: [{ name: '', course: '' }]
+  });
 
   const toggleStudent = (studentId) => {
     setSelectedStudentIds(prev => 
@@ -238,50 +118,96 @@ const TeacherDashboard = () => {
     }
 
     try {
-      // setLoading(true); // Don't block whole UI
       await projectService.updateProject(selectedProjectForAssign.id, {
         studentIds: selectedStudentIds
       });
       toast.success('Students assigned successfully! Project is now In Progress.');
       setShowAssignModal(false);
       setSelectedStudentIds([]);
-      // Refresh page to show updated status
       setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
       toast.error('Failed to assign students');
     }
   };
 
-    const fetchOptions = async () => {
-      try {
-        const [cats, depts, students] = await Promise.all([
-          projectService.getProjectCategories(),
-          projectService.getDepartments(),
-          projectService.getStudents()
-        ]);
-        
-        if (cats && cats.length > 0) {
-          setCategories(cats);
-          setNewProject(prev => ({ ...prev, category: cats[0] }));
-        }
-        
-        if (depts && depts.length > 0) {
-          setDepartments(depts);
-          if (!newProject.departmentId) {
-            setNewProject(prev => ({ ...prev, departmentId: depts[0].id }));
-          }
-        }
+  const fetchDashboardData = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      const projects = await rankingService.getTeacherProjects(user.id || user._id);
+      
+      const current = projects.filter(p => p.status === 'In Progress' || p.status === 'Active' || p.status === 'Review Required' || p.status === 'Proposed');
+      const completed = projects.filter(p => p.status === 'Completed');
+      
+      setCurrentFYPs(current);
+      setCompletedFYPs(completed);
 
-        if (students && students.length > 0) {
-          setAllStudents(students);
-        }
-      } catch (error) {
-        console.error('Error fetching options:', error);
+      const currentYear = new Date().getFullYear();
+      let sFYPs = projects.length;
+      let aStudents = projects.reduce((acc, p) => acc + (p.students?.length || 0), 0);
+      let cFYPs = completed.length;
+      let sRate = projects.length > 0 ? Math.round((completed.length / projects.length) * 100) : 0;
+
+      setStatsData([
+        { name: 'Supervised FYPs', value: sFYPs.toString(), icon: BookOpen, color: 'bg-blue-500', change: `+${current.length} active`, trend: 'up' },
+        { name: 'Active Students', value: aStudents.toString(), icon: Users, color: 'bg-green-500', change: `${current.length} teams`, trend: 'up' },
+        { name: 'Completed FYPs', value: cFYPs.toString(), icon: CheckCircle, color: 'bg-purple-500', change: 'Lifetime', trend: 'up' },
+        { name: 'Success Rate', value: `${sRate}%`, icon: TrendingUp, color: 'bg-orange-500', change: 'Graduated', trend: 'up' },
+      ]);
+
+      setUpcomingMeetings([
+        { id: 1, title: 'Weekly Progress Review', time: '10:00 AM', date: 'Today', students: ['Team Alpha'], type: 'progress', duration: '1 hour', agenda: ['Updates'] },
+        { id: 2, title: 'Technical Discussion', time: '2:00 PM', date: 'Tomorrow', students: ['Team Beta'], type: 'technical', duration: '45 mins', agenda: ['Review'] }
+      ]);
+
+      setResearchInsights([
+        { category: 'Machine Learning', projects: 12, avgGrade: 'A', successRate: '92%', trendingTopics: ['NLP', 'CV'], challenges: ['Data quality'] },
+        { category: 'Web Development', projects: 8, avgGrade: 'A-', successRate: '88%', trendingTopics: ['React', 'Node'], challenges: ['Security'] }
+      ]);
+
+    } catch (error) {
+      console.error('Error fetching teacher dashboard data:', error);
+      toast.error('Could not connect to backend. Please check your server status.');
+      setCurrentFYPs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchOptions = async () => {
+    try {
+      const [cats, depts, students] = await Promise.all([
+        projectService.getProjectCategories(),
+        projectService.getDepartments(),
+        projectService.getStudents()
+      ]);
+      
+      if (cats && cats.length > 0) {
+        const apiCatNames = cats.map(c => c.name);
+        setCategories(apiCatNames);
+        setNewProject(prev => ({ ...prev, category: apiCatNames[0] }));
       }
-    };
+      
+      if (depts && depts.length > 0) {
+        setDepartments(depts);
+        const userDeptId = user.departmentId || depts[0].id;
+        setNewProject(prev => ({ ...prev, departmentId: userDeptId }));
+      }
 
-    fetchDashboardData();
-    fetchOptions();
+      if (students && students.length > 0) {
+        setAllStudents(students);
+      }
+    } catch (error) {
+      console.error('Error fetching options:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchDashboardData();
+      fetchOptions();
+    }
   }, [user]);
 
   const handleProposeFYP = async (e) => {
@@ -311,7 +237,9 @@ const TeacherDashboard = () => {
         year: new Date().getFullYear(),
         semester: 'Fall',
         difficultyLevel: 'Medium',
-        studentIds: []
+        studentIds: [],
+        documentUrl: '',
+        sourceCodeUrl: ''
       });
 
       // Refresh project list
@@ -338,7 +266,75 @@ const TeacherDashboard = () => {
       case 'Review Required': return 'bg-orange-100 text-orange-800';
       case 'Planning': return 'bg-yellow-100 text-yellow-800';
       case 'Completed': return 'bg-green-100 text-green-800';
+      case 'Proposed': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Open manage modal for a project
+  const openManageModal = (project) => {
+    setManagedProject(project);
+    setManageForm({
+      status: project.status === 'Proposed' ? 'In Progress' : project.status,
+      progressNote: '',
+      progressPercent: project.progress || 0,
+      studentDetails: (project.students && project.students.length > 0)
+        ? project.students.map(s => ({ name: typeof s === 'string' ? s : (s.name || ''), course: s.course || '' }))
+        : [{ name: '', course: '' }]
+    });
+    setShowManageModal(true);
+  };
+
+  const addStudentRow = () => {
+    setManageForm(prev => ({
+      ...prev,
+      studentDetails: [...prev.studentDetails, { name: '', course: '' }]
+    }));
+  };
+
+  const removeStudentRow = (index) => {
+    setManageForm(prev => ({
+      ...prev,
+      studentDetails: prev.studentDetails.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateStudentDetail = (index, field, value) => {
+    setManageForm(prev => {
+      const updated = [...prev.studentDetails];
+      updated[index] = { ...updated[index], [field]: value };
+      return { ...prev, studentDetails: updated };
+    });
+  };
+
+  const handleManageFYP = async () => {
+    if (!managedProject) return;
+    const validStudents = manageForm.studentDetails.filter(s => s.name.trim());
+    if (validStudents.length === 0) {
+      toast.error('Please add at least one student name');
+      return;
+    }
+    try {
+      setManageLoading(true);
+      const payload = {
+        status: manageForm.status,
+        progress: parseInt(manageForm.progressPercent) || 0,
+        progressNote: manageForm.progressNote,
+        students: validStudents.map(s => s.name),
+        studentDetails: validStudents
+      };
+      await projectService.updateProject(managedProject.id, payload);
+      toast.success(
+        manageForm.status === 'In Progress'
+          ? '🚀 FYP moved to In Progress with student details saved!'
+          : 'FYP details updated successfully!'
+      );
+      setShowManageModal(false);
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      toast.error('Failed to update FYP. Please try again.');
+    } finally {
+      setManageLoading(false);
     }
   };
 
@@ -374,13 +370,20 @@ const TeacherDashboard = () => {
                   Supervise and track FYP progress with comprehensive analytics and insights.
                 </p>
               </div>
-              <div className="mt-4 sm:mt-0">
+              <div className="mt-4 sm:mt-0 flex gap-3">
                 <button 
                   onClick={() => setShowCreateModal(true)}
-                  className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center group"
                 >
-                  <Plus className="h-5 w-5 mr-2" />
+                  <Plus className="h-5 w-5 mr-2 group-hover:rotate-90 transition-transform" />
                   Propose New FYP
+                </button>
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  title="Account Settings"
+                  className="flex items-center justify-center px-4 py-3 bg-white text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all duration-300 shadow-sm hover:shadow-md font-semibold group flex-shrink-0"
+                >
+                  <Settings className="h-5 w-5 group-hover:rotate-45 transition-transform duration-300" />
                 </button>
               </div>
             </div>
@@ -702,23 +705,19 @@ const TeacherDashboard = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {project.status === 'Proposed' && (
-                            <button 
-                              onClick={() => {
-                                setSelectedProjectForAssign(project);
-                                setShowAssignModal(true);
-                              }}
-                              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium mr-2"
-                            >
-                              <Users className="h-4 w-4 mr-2" />
-                              Assign Group
-                            </button>
-                          )}
-                          <button className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-                            <Eye className="h-5 w-5" />
+                          <button 
+                            onClick={() => openManageModal(project)}
+                            className={`flex items-center px-4 py-2 rounded-lg transition-colors text-sm font-semibold shadow-sm ${
+                              project.status === 'Proposed'
+                                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                                : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                            }`}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            {project.status === 'Proposed' ? 'Set Up FYP' : 'Manage'}
                           </button>
-                          <button className="p-2 text-gray-400 hover:text-green-500 transition-colors">
-                            <Edit className="h-5 w-5" />
+                          <button className="p-2 text-gray-400 hover:text-blue-500 transition-colors" onClick={() => navigate(`/project/${project.id}`)}>
+                            <Eye className="h-5 w-5" />
                           </button>
                           <button className="p-2 text-gray-400 hover:text-purple-500 transition-colors">
                             <MessageSquare className="h-5 w-5" />
@@ -1127,6 +1126,28 @@ const TeacherDashboard = () => {
                   required
                 ></textarea>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Document URL (Optional)</label>
+                  <input 
+                    type="url" 
+                    value={newProject.documentUrl}
+                    onChange={(e) => setNewProject({...newProject, documentUrl: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    placeholder="Link to project proposal/doc"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Source Code URL (Optional)</label>
+                  <input 
+                    type="url" 
+                    value={newProject.sourceCodeUrl}
+                    onChange={(e) => setNewProject({...newProject, sourceCodeUrl: e.target.value})}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                    placeholder="Link to repository"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button 
@@ -1146,87 +1167,170 @@ const TeacherDashboard = () => {
         </div>
       )}
 
-      {/* Assign Group Modal */}
-      {showAssignModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 max-w-lg w-full mx-4 animate-slide-up">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Assign Student Group</h3>
-            <p className="text-sm text-gray-600 mb-6">
-              Project: <span className="font-semibold text-blue-600">{selectedProjectForAssign?.title}</span>
-            </p>
-            
-            <div className="relative mb-4">
-              <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search students by name or ID..."
-                value={studentSearchTerm}
-                onChange={(e) => setStudentSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
+      {/* Manage FYP Modal — Status Update, Student Details, Progress */}
+      {showManageModal && managedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl mx-auto animate-slide-up shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className={`px-8 py-6 ${
+              managedProject.status === 'Proposed'
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600'
+                : 'bg-gradient-to-r from-blue-600 to-indigo-600'
+            }`}>
+              <h3 className="text-2xl font-bold text-white mb-1">
+                {managedProject.status === 'Proposed' ? '🚀 Set Up FYP Project' : '⚙️ Manage FYP'}
+              </h3>
+              <p className="text-white/80 text-sm">{managedProject.title}</p>
             </div>
 
-            <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg mb-6">
-              {allStudents
-                .filter(s => 
-                  `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
-                  s.studentId?.toLowerCase().includes(studentSearchTerm.toLowerCase())
-                )
-                .map(student => (
-                  <div 
-                    key={student.id} 
-                    onClick={() => toggleStudent(student.id)}
-                    className={`p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-0 ${
-                      selectedStudentIds.includes(student.id) ? 'bg-blue-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                        selectedStudentIds.includes(student.id) ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
-                      }`}>
-                        {student.firstName ? student.firstName[0] : ''}{student.lastName ? student.lastName[0] : ''}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{student.firstName} {student.lastName}</p>
-                        <p className="text-xs text-gray-500">{student.studentId || 'No ID'}</p>
-                      </div>
-                    </div>
-                    {selectedStudentIds.includes(student.id) && (
-                      <CheckCircle className="h-5 w-5 text-blue-600" />
-                    )}
-                  </div>
-                ))}
-              {allStudents.filter(s => 
-                  `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearchTerm.toLowerCase()) ||
-                  s.studentId?.toLowerCase().includes(studentSearchTerm.toLowerCase())
-                ).length === 0 && (
-                  <div className="p-8 text-center text-gray-500">
-                    No students found searching "{studentSearchTerm}"
-                  </div>
+            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+              {/* Status Update */}
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center">
+                  <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold mr-2">1</span>
+                  Update Status
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  {['Proposed', 'In Progress', 'Review Required'].map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setManageForm(prev => ({ ...prev, status: s }))}
+                      className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                        manageForm.status === s
+                          ? s === 'In Progress' ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : s === 'Review Required' ? 'border-orange-500 bg-orange-50 text-orange-700'
+                            : 'border-purple-500 bg-purple-50 text-purple-700'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {managedProject.status === 'Proposed' && manageForm.status === 'In Progress' && (
+                  <p className="mt-3 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    ✅ This will move the FYP from <strong>Proposed</strong> to <strong>In Progress</strong>.
+                  </p>
                 )}
+              </div>
+
+              {/* Student Details */}
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-base font-bold text-gray-900 flex items-center">
+                    <span className="w-6 h-6 bg-green-100 text-green-700 rounded-full flex items-center justify-center text-xs font-bold mr-2">2</span>
+                    Student Details
+                  </h4>
+                  <button
+                    onClick={addStudentRow}
+                    className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add Student
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {manageForm.studentDetails.map((student, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Student full name *"
+                        value={student.name}
+                        onChange={(e) => updateStudentDetail(index, 'name', e.target.value)}
+                        className="flex-1 p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Course / Program (e.g. BSCS)"
+                        value={student.course}
+                        onChange={(e) => updateStudentDetail(index, 'course', e.target.value)}
+                        className="flex-1 p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {manageForm.studentDetails.length > 1 && (
+                        <button
+                          onClick={() => removeStudentRow(index)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">* At least one student name is required to proceed.</p>
+              </div>
+
+              {/* Progress */}
+              <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center">
+                  <span className="w-6 h-6 bg-orange-100 text-orange-700 rounded-full flex items-center justify-center text-xs font-bold mr-2">3</span>
+                  Progress Update
+                </h4>
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">Completion %</label>
+                    <span className="text-lg font-bold text-blue-600">{manageForm.progressPercent}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={manageForm.progressPercent}
+                    onChange={(e) => setManageForm(prev => ({ ...prev, progressPercent: e.target.value }))}
+                    className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer accent-blue-600"
+                  />
+                  <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${manageForm.progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Progress Note (Optional)</label>
+                  <textarea
+                    rows="3"
+                    placeholder="Describe what has been accomplished, milestones reached, or next steps..."
+                    value={manageForm.progressNote}
+                    onChange={(e) => setManageForm(prev => ({ ...prev, progressNote: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3">
-              <button 
-                onClick={() => {
-                  setShowAssignModal(false);
-                  setSelectedStudentIds([]);
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                disabled={loading}
+            {/* Modal Footer */}
+            <div className="px-8 py-5 border-t border-gray-100 flex gap-3 bg-gray-50">
+              <button
+                onClick={() => setShowManageModal(false)}
+                className="flex-1 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-100 transition-colors"
+                disabled={manageLoading}
               >
                 Cancel
               </button>
-              <button 
-                onClick={handleAssignStudents}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                disabled={loading || selectedStudentIds.length === 0}
+              <button
+                onClick={handleManageFYP}
+                disabled={manageLoading}
+                className={`flex-2 px-8 py-3 rounded-xl font-semibold text-white transition-all shadow-lg disabled:opacity-50 ${
+                  managedProject.status === 'Proposed'
+                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
+                }`}
               >
-                {loading ? 'Assigning...' : 'Confirm Assignment'}
+                {manageLoading ? (
+                  <span className="flex items-center"><span className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>Saving...</span>
+                ) : managedProject.status === 'Proposed' ? '🚀 Start FYP & Save Details' : '💾 Save Changes'}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {showSettingsModal && (
+        <ChangePasswordModal onClose={() => setShowSettingsModal(false)} />
       )}
     </div>
   );
